@@ -111,7 +111,7 @@ fun MainScreen(modifier: Modifier = Modifier, goToScreen2: (List<String>) -> Uni
     val textBoxHeight = if (isPortrait) 180.dp else 200.dp
 
     // Queste sono le lambda che vengono utilizzate in entrambe le situazioni (sia portrait che landscape)
-    val onColorClick: (String) -> Unit = { color -> // Faccio State Hoisting
+    val onColorClick: (String) -> Unit = { color ->
         txt += if (txt.isEmpty()) color else ", $color"
         Log.d(tagMainD, "BTN '$color' clicked")
     }

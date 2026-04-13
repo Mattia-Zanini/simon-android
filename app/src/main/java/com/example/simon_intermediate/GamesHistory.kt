@@ -129,6 +129,6 @@ fun GameCard(gameString: String) {
 @Composable
 fun ScreenTwoPreview() {
     SimonIntermediateTheme {
-        ScreenTwo(historyList = arrayListOf())
+        ScreenTwo(historyList = arrayListOf("R, M, Y, G", "R, R, R, Y", ""))
     }
 }
