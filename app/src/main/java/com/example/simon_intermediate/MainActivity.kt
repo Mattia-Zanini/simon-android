@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -28,18 +30,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
-import androidx.room.Room
+import com.example.simon_intermediate.data.Match
+import com.example.simon_intermediate.data.MatchDao
+import com.example.simon_intermediate.data.AppDatabase
 import com.example.simon_intermediate.ui.theme.SimonIntermediateTheme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlin.collections.arrayListOf
 
 // Tag per il logger di debug di MainActivity
 const val tagHistoryD = "MainActivity"
 
 class MainActivity : ComponentActivity() {
-    private lateinit var historyData: List<String>
+    private lateinit var historyData: List<Match>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,26 +49,12 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
-        // Recupero la lista (se è null, creo una lista vuota)
-        historyData = arrayListOf<String>()
-
-        // --- TEST ROOM ---
         // Ottengo direttamente il DAO tramite il Singleton
         val dao = AppDatabase.getDatabaseDao(this)
 
-        // Utilizzo il DAO
-        dao.insert(Match(maxLength = 0, finalSequence = "Y, G", errorIndex = 1))
-        val tutti = dao.getAll()
-        Log.d("RoomTest", "Elementi nel DB: ${tutti.size}")
-        tutti.forEach { 
-            Log.d("RoomTest", it.toString())
-        }
-        /*
-        dao.deleteAll()
-        Log.d("RoomTest", "Eliminati tutti i records")
-        tutti = dao.getAll()
-        Log.d("RoomTest", "Elementi nel DB: ${tutti.size}")
-        */
+        // Recupero la lista delle partite
+        historyData = dao.getAll()
+        Log.d(tagHistoryD, "Numero di elementi nel DB: ${historyData.size}")
 
         setContent {
             SimonIntermediateTheme {
@@ -90,8 +77,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-// Dichiaro historyList come una List<String> in quanto deve SOLO leggere l'ArrayList<String> e NON modificarla
-fun HomeScreen(modifier: Modifier = Modifier, historyList: List<String>, goToGameScreen: () -> Unit) {
+fun HomeScreen(
+    modifier: Modifier = Modifier,
+    historyList: List<Match>,
+    goToGameScreen: () -> Unit
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -122,14 +112,22 @@ fun HomeScreen(modifier: Modifier = Modifier, historyList: List<String>, goToGam
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.Start
         ) {
-            Button(onClick = goToGameScreen) { Text(stringResource(R.string.start_game)) }
+            Button(
+                onClick = goToGameScreen,
+                colors = ButtonDefaults.filledTonalButtonColors(MaterialTheme.colorScheme.primary),
+            ) {
+                Text(
+                    stringResource(R.string.start_game),
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
         }
     }
 }
 
 // Card della singola partita
 @Composable
-fun GameCard(gameString: String) {
+fun GameCard(gameInfo: Match) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -139,7 +137,7 @@ fun GameCard(gameString: String) {
             .height(25.dp),
         horizontalArrangement = Arrangement.Start
     ) {
-        val colorsSequence = gameString.split(", ")
+        val colorsSequence = gameInfo.finalSequence.split(", ")
         var numSequence = colorsSequence.count()
 
         // Controllo che la stringa sia vuota e correggo il valore di numSequence
@@ -157,7 +155,7 @@ fun GameCard(gameString: String) {
         // Sequenza dei pulsanti cliccati
         Text(
             modifier = Modifier.weight(1f),
-            text = gameString,
+            text = gameInfo.finalSequence,
             color = MaterialTheme.colorScheme.onSecondaryContainer,
             maxLines = 1, // Forza il testo su una sola riga
             overflow = TextOverflow.Ellipsis, // Aggiunge i "..." se il testo non ci sta
@@ -169,6 +167,13 @@ fun GameCard(gameString: String) {
 @Composable
 fun HomeScreenPreview() {
     SimonIntermediateTheme {
-        HomeScreen(historyList = arrayListOf("R, M, Y, G", "R, R, R, Y, G", ""), goToGameScreen = {})
+        HomeScreen(
+            historyList = arrayListOf(
+                Match(maxLength = 0, finalSequence = "Y, G", errorIndex = 1),
+                Match(maxLength = 0, finalSequence = "G, G, G, R", errorIndex = 1),
+                Match(maxLength = 0, finalSequence = "M, Y, G, B, R, R, R, Y", errorIndex = 1)
+            ),
+            goToGameScreen = {}
+        )
     }
 }

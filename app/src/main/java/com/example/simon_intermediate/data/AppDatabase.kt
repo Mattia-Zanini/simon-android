@@ -1,4 +1,4 @@
-package com.example.simon_intermediate
+package com.example.simon_intermediate.data
 
 import androidx.room.Room
 import androidx.room.RoomDatabase

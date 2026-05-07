@@ -26,6 +26,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -36,9 +37,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.simon_intermediate.ui.theme.SimonIntermediateTheme
+import com.example.simon_intermediate.data.Match
+import com.example.simon_intermediate.data.AppDatabase
 
 // Tag per il logger di debug di GameActivity
 const val tagMainD = "GameActivity"
+
+data class SimonButton(
+    val label: String,
+    val color: Color,
+    val colorShadowed: Color
+)
 
 class GameActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,15 +57,29 @@ class GameActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
+        val dao = AppDatabase.getDatabaseDao(this)
+        val simonButtons = listOf(
+            SimonButton("R", Color.Red, Color(0xFFAA3333)),
+            SimonButton("G", Color.Green, Color(0xFF338833)),
+            SimonButton("B", Color.Blue, Color(0xFF3333AA)),
+            SimonButton("M", Color.Magenta, Color(0xF9AA33AA)),
+            SimonButton("Y", Color.Yellow, Color(0xFFAAAA33)),
+            SimonButton("C", Color.Cyan, Color(0xFF33AAAA))
+        )
+
         setContent {
             SimonIntermediateTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     // MainScreen utilizza gli "insets" (presenti in 'innerPadding') per mantenere
                     // l'interfaccia utente lontana dalla UI di sistema e dai ritagli del display (come il notch)
                     GameScreen(
-                        modifier = Modifier
+                        Modifier
                             .fillMaxSize()
                             .padding(innerPadding),
+                        simonButtons,
+                        insertMatch = { matchToInsert: Match ->
+                            dao.insert(matchToInsert)
+                        },
                         goToHomeScreen = { finish() }
                     )
                 }
@@ -66,21 +89,31 @@ class GameActivity : ComponentActivity() {
 }
 
 @Composable
-fun GameScreen(modifier: Modifier = Modifier, goToHomeScreen: () -> Unit) {
+fun GameScreen(
+    modifier: Modifier = Modifier,
+    simonBtns: List<SimonButton>,
+    insertMatch: (Match) -> Unit,
+    goToHomeScreen: () -> Unit
+) {
     // Recupero l'orientamento attuale del dispositivo
     val orientation = LocalConfiguration.current.orientation
     val isPortrait: Boolean = orientation == Configuration.ORIENTATION_PORTRAIT
 
-    // Contiene lo storico di tutte le partite
-    var history by rememberSaveable { mutableStateOf(listOf<String>()) }
-
     // Stato per memorizzare la sequenza di colori cliccati
     var txt by rememberSaveable { mutableStateOf("") }
 
-    // Lista dei colori per la griglia
-    val colors = listOf(Color.Red, Color.Green, Color.Blue, Color.Magenta, Color.Yellow, Color.Cyan)
-    // Lettere associate ai colori
-    val btnStrings = listOf("R", "G", "B", "M", "Y", "C")
+    // false se il computer sta riproducendo la sequenza, true se tocca all'utente
+    var isPlayerTurn by rememberSaveable { mutableStateOf(false) }
+
+    // Contiene la label del colore che il computer sta mostrando (es. "R")
+    var activeColorLabel by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // Rappresenta l'index della sequenza che il computer ha appena mostrato
+    var computerIndex by rememberSaveable { mutableIntStateOf(-1) }
+
+    // test dell'active color
+    activeColorLabel = "R"
+    computerIndex = 0
 
     // Assegno il numero di colonne e di righe
     val cols = 3
@@ -104,7 +137,6 @@ fun GameScreen(modifier: Modifier = Modifier, goToHomeScreen: () -> Unit) {
         Log.d(tagMainD, "BTN 'End Game' clicked")
 
         // NON controllo che txt != empty perchè salvo anche le partite con 0 pulsanti cliccati
-        history += txt // aggiungo la sequenza allo storico
         txt = ""
 
         goToHomeScreen()
@@ -118,7 +150,15 @@ fun GameScreen(modifier: Modifier = Modifier, goToHomeScreen: () -> Unit) {
                 .padding(16.dp) // Margine esterno
         ) {
             // Matrice di pulsanti colorati
-            ColorGrid(Modifier.weight(1f), rows, cols, colors, btnStrings, onColorClick)
+            ColorGrid(
+                Modifier.weight(1f),
+                rows,
+                cols,
+                simonBtns,
+                isPlayerTurn,
+                activeColorLabel,
+                onColorClick
+            )
 
             // Text per contenere la sequenza
             TextBox(
@@ -144,7 +184,15 @@ fun GameScreen(modifier: Modifier = Modifier, goToHomeScreen: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Sinistra: Griglia (55% dello spazio)
-            ColorGrid(Modifier.weight(0.55f), rows, cols, colors, btnStrings, onColorClick)
+            ColorGrid(
+                Modifier.weight(0.55f),
+                rows,
+                cols,
+                simonBtns,
+                isPlayerTurn,
+                activeColorLabel,
+                onColorClick
+            )
 
             // Destra: TextBox + Pulsanti (45% dello spazio)
             Column(
@@ -171,14 +219,14 @@ fun GameScreen(modifier: Modifier = Modifier, goToHomeScreen: () -> Unit) {
     }
 }
 
-// Matrice dei pulsanti colorati
 @Composable
 fun ColorGrid(
     modifier: Modifier = Modifier,
     rows: Int,
     cols: Int,
-    colors: List<Color>,
-    colorsStrings: List<String>,
+    buttonsList: List<SimonButton>,
+    isPlayerTurn: Boolean,
+    activeColorLabel: String?,
     onButtonClick: (String) -> Unit
 ) {
     Column(modifier = modifier) {
@@ -194,14 +242,24 @@ fun ColorGrid(
                 repeat(rows) {
                     val i = index
 
+                    val activeColor = buttonsList[i].color
+                    val disabledColor = buttonsList[i].colorShadowed
+                    val btnLabel = buttonsList[i].label
+
+                    val isThisButtonActive = btnLabel == activeColorLabel
+
                     Button(
                         modifier = Modifier
                             .weight(1f) // Distribuisco equamente lo spazio orizzontale tra i pulsanti
                             .fillMaxHeight()
                             .padding(vertical = 4.dp), // Spazio tra le righe
                         shape = RoundedCornerShape(6.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(colors[i]),
-                        onClick = { onButtonClick(colorsStrings[i]) }
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = activeColor,
+                            disabledContainerColor = if (isThisButtonActive) activeColor else disabledColor
+                        ),
+                        onClick = { onButtonClick(btnLabel) },
+                        enabled = isPlayerTurn
                     ) { }
 
                     // Incremento l'indice per scorrere le liste dei colori e delle stringhe
@@ -246,13 +304,29 @@ fun ActionButtons(onDelete: () -> Unit, onEnd: () -> Unit) {
         // Allineo i pulsanti ai lati opposti della riga lasciando, quindi rimane uno spazio in mezzo tra di loro
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Button(onClick = onDelete) { Text(stringResource(R.string.delete_btn)) }
-        Button(onClick = onEnd) { Text(stringResource(R.string.end_game_btn)) }
+        Button(
+            onClick = onDelete,
+            colors = ButtonDefaults.filledTonalButtonColors(MaterialTheme.colorScheme.primary),
+        ) {
+            Text(
+                stringResource(R.string.delete_btn),
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+        }
+        Button(
+            onClick = onEnd,
+            colors = ButtonDefaults.filledTonalButtonColors(MaterialTheme.colorScheme.primary),
+        ) {
+            Text(
+                stringResource(R.string.end_game_btn),
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+        }
     }
 }
 
 @Preview(showBackground = true)
 @Composable
 fun MainScreenPreview() {
-    GameScreen(goToHomeScreen = {})
+    GameScreen(simonBtns = listOf(), insertMatch = {}, goToHomeScreen = {})
 }

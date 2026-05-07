@@ -1,4 +1,4 @@
-package com.example.simon_intermediate
+package com.example.simon_intermediate.data
 
 import androidx.room.Dao
 import androidx.room.Insert
@@ -8,7 +8,7 @@ import androidx.room.Query
 interface MatchDao {
     // Inserisce una nuova riga nel database
     @Insert
-    fun insert(elemento: Match)
+    fun insert(currentMatch: Match)
 
     // Recupera tutte le righe dalla tabella
     @Query("SELECT * FROM gameHistory")
