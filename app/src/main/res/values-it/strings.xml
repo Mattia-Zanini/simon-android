@@ -3,4 +3,5 @@
     <string name="delete_btn">Cancella</string>
     <string name="end_game_btn">Fine Partita</string>
     <string name="history_title_text">Storico partite</string>
+    <string name="start_game">Inizia Partita</string>
 </resources>
