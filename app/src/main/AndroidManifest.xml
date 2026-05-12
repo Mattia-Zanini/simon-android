@@ -24,6 +24,7 @@
         </activity>
 
         <activity android:name=".GameActivity" />
+        <activity android:name=".MatchDetail" />
     </application>
 
 </manifest>

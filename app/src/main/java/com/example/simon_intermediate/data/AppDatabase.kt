@@ -35,7 +35,6 @@ abstract class AppDatabase : RoomDatabase() {
                             "simon-db"
                         )
                         .fallbackToDestructiveMigration(dropAllTables = true) // LA TENGO PER IL DEVELOP, al momento di distruggere il database per un cambio di versione non gestito, Room elimina tutte le tabelle presenti nel db
-                        .allowMainThreadQueries() // Permette di accedere al database sul thread principale
                         .build()
                     }
                 }

@@ -36,12 +36,16 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.example.simon_intermediate.ui.theme.SimonIntermediateTheme
 import com.example.simon_intermediate.data.Match
 import com.example.simon_intermediate.data.AppDatabase
 
 // Tag per il logger di debug di GameActivity
-const val tagMainD = "GameActivity"
+const val tagGameActivity = "GameActivity"
 
 data class SimonButton(
     val label: String,
@@ -53,7 +57,7 @@ class GameActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        Log.d(tagMainD, "onCreate Activity 2")
+        Log.d(tagGameActivity, "onCreate Activity 2")
 
         enableEdgeToEdge()
 
@@ -78,9 +82,16 @@ class GameActivity : ComponentActivity() {
                             .padding(innerPadding),
                         simonButtons,
                         insertMatch = { matchToInsert: Match ->
-                            dao.insert(matchToInsert)
-                        },
-                        goToHomeScreen = { finish() }
+                            //  esegue l'inserimento nel database e, solo al termine del salvataggio,
+                            //  torna sul thread principale (Dispatchers.Main) per chiudere l'activity con finish().
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                dao.insert(matchToInsert)
+                                withContext(Dispatchers.Main) {
+                                    Log.d(tagGameActivity, "going back to MainActivity")
+                                    finish() // ritorna all'activity precedente
+                                }
+                            }
+                        }
                     )
                 }
             }
@@ -92,8 +103,7 @@ class GameActivity : ComponentActivity() {
 fun GameScreen(
     modifier: Modifier = Modifier,
     simonBtns: List<SimonButton>,
-    insertMatch: (Match) -> Unit,
-    goToHomeScreen: () -> Unit
+    insertMatch: (Match) -> Unit
 ) {
     // Recupero l'orientamento attuale del dispositivo
     val orientation = LocalConfiguration.current.orientation
@@ -125,21 +135,28 @@ fun GameScreen(
     // Queste sono le lambda che vengono utilizzate in entrambe le situazioni (sia portrait che landscape)
     val onColorClick: (String) -> Unit = { color ->
         txt += if (txt.isEmpty()) color else ", $color"
-        Log.d(tagMainD, "BTN '$color' clicked")
+        Log.d(tagGameActivity, "BTN '$color' clicked")
     }
 
     val onDeleteClick: () -> Unit = {
         txt = "" // ripulisco la text
-        Log.d(tagMainD, "BTN 'Delete' clicked")
+        Log.d(tagGameActivity, "BTN 'Delete' clicked")
     }
 
     val onEndClick: () -> Unit = {
-        Log.d(tagMainD, "BTN 'End Game' clicked")
+        Log.d(tagGameActivity, "BTN 'End Game' clicked")
 
-        // NON controllo che txt != empty perchè salvo anche le partite con 0 pulsanti cliccati
+        // Creazione dell'oggetto Match con la sequenza attuale
+        val currentMatch = Match(
+            finalSequence = txt,
+            errorIndex = 0,
+            maxLengthCompleted = txt.length - 1
+        )
+
         txt = ""
 
-        goToHomeScreen()
+        // Chiamo la lambda insertMatch che si occupa del salvataggio asincrono e della chiusura dell'Activity
+        insertMatch(currentMatch)
     }
 
     if (isPortrait) {
@@ -328,5 +345,14 @@ fun ActionButtons(onDelete: () -> Unit, onEnd: () -> Unit) {
 @Preview(showBackground = true)
 @Composable
 fun MainScreenPreview() {
-    GameScreen(simonBtns = listOf(), insertMatch = {}, goToHomeScreen = {})
+    val demoButtons = listOf(
+        SimonButton("R", Color.Red, Color(0xFFAA3333)),
+        SimonButton("G", Color.Green, Color(0xFF338833)),
+        SimonButton("B", Color.Blue, Color(0xFF3333AA)),
+        SimonButton("M", Color.Magenta, Color(0xF9AA33AA)),
+        SimonButton("Y", Color.Yellow, Color(0xFFAAAA33)),
+        SimonButton("C", Color.Cyan, Color(0xFF33AAAA))
+    )
+
+    GameScreen(simonBtns = demoButtons, insertMatch = {})
 }

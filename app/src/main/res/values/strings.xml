@@ -4,4 +4,9 @@
     <string name="end_game_btn">End Game</string>
     <string name="history_title_text">Games History</string>
     <string name="start_game">Start Game</string>
+    <string name="back">Back</string>
+    <string name="match_info">Game Info</string>
+    <string name="final_sequence">Final sequence</string>
+    <string name="error_index">Error\'s index</string>
+    <string name="max_length">Max length</string>
 </resources>

@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -30,31 +30,46 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import com.example.simon_intermediate.data.Match
-import com.example.simon_intermediate.data.MatchDao
 import com.example.simon_intermediate.data.AppDatabase
 import com.example.simon_intermediate.ui.theme.SimonIntermediateTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.collections.arrayListOf
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
 // Tag per il logger di debug di MainActivity
-const val tagHistoryD = "MainActivity"
+const val tagMainActivity = "MainActivity"
+const val MATCHEXTRA = "MATCH_ID"
 
 class MainActivity : ComponentActivity() {
-    private lateinit var historyData: List<Match>
+    private var historyData by mutableStateOf(listOf<Match>())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        Log.d(tagHistoryD, "onCreate Activity 1")
+        Log.d(tagMainActivity, "onCreate Activity 1")
 
         enableEdgeToEdge()
 
         // Ottengo direttamente il DAO tramite il Singleton
         val dao = AppDatabase.getDatabaseDao(this)
 
-        // Recupero la lista delle partite
-        historyData = dao.getAll()
-        Log.d(tagHistoryD, "Numero di elementi nel DB: ${historyData.size}")
+        // Uso lifecycleScope (coroutine) per il reperimento in modo asincrono della lista delle partite dal database
+        lifecycleScope.launch {
+            // withContext(Dispatchers.IO) sposta l'esecuzione su un thread dedicato all'I/O
+            val data = withContext(Dispatchers.IO) {
+                dao.getAll()
+            }
+            // Qui siamo di nuovo sul Main Thread, quindi possiamo aggiornare la UI
+            historyData = data
+            Log.d(tagMainActivity, "Numero di elementi nel DB: ${historyData.size}")
+        }
 
         setContent {
             SimonIntermediateTheme {
@@ -66,7 +81,17 @@ class MainActivity : ComponentActivity() {
                         historyList = historyData, // Qui passo lo storico delle partite al composable della Home Screen
                         goToGameScreen = {
                             val myIntent = Intent(this, GameActivity::class.java)
-                            Log.d(tagMainD, "startActivity of GameActivity")
+                            Log.d(tagMainActivity, "startActivity of GameActivity")
+                            startActivity(myIntent)
+                        },
+                        goToDetailScreen = { matchID ->
+                            val myIntent = Intent(this, MatchDetail::class.java)
+                            // Reference: https://developer.android.com/reference/android/content/Intent#putExtra(java.lang.String,%20android.os.Parcelable)
+                            myIntent.putExtra(
+                                MATCHEXTRA,
+                                matchID
+                            )
+                            Log.d(tagMainActivity, "startActivity of MatchDetail")
                             startActivity(myIntent)
                         }
                     )
@@ -80,7 +105,8 @@ class MainActivity : ComponentActivity() {
 fun HomeScreen(
     modifier: Modifier = Modifier,
     historyList: List<Match>,
-    goToGameScreen: () -> Unit
+    goToGameScreen: () -> Unit,
+    goToDetailScreen: (Int) -> Unit
 ) {
     Column(
         modifier = modifier
@@ -90,6 +116,7 @@ fun HomeScreen(
         // Titolo della schermata
         Text(
             text = stringResource(R.string.history_title_text),
+            style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 24.dp),
@@ -103,7 +130,7 @@ fun HomeScreen(
                 .weight(1f)
         ) {
             items(historyList.size) { i ->
-                GameCard(historyList[i])
+                GameCard(historyList[i], goToDetailScreen)
             }
         }
 
@@ -127,14 +154,17 @@ fun HomeScreen(
 
 // Card della singola partita
 @Composable
-fun GameCard(gameInfo: Match) {
+fun GameCard(gameInfo: Match, detailFun: (Int) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(8.dp))
             .padding(16.dp)
-            .height(25.dp),
+            .height(25.dp)
+            .clickable {
+                detailFun(gameInfo.id)
+            },
         horizontalArrangement = Arrangement.Start
     ) {
         val colorsSequence = gameInfo.finalSequence.split(", ")
@@ -169,11 +199,16 @@ fun HomeScreenPreview() {
     SimonIntermediateTheme {
         HomeScreen(
             historyList = arrayListOf(
-                Match(maxLength = 0, finalSequence = "Y, G", errorIndex = 1),
-                Match(maxLength = 0, finalSequence = "G, G, G, R", errorIndex = 1),
-                Match(maxLength = 0, finalSequence = "M, Y, G, B, R, R, R, Y", errorIndex = 1)
+                Match(finalSequence = "Y, G", errorIndex = 1, maxLengthCompleted = 1),
+                Match(finalSequence = "G, G, G, R", errorIndex = 1, maxLengthCompleted = 3),
+                Match(
+                    finalSequence = "M, Y, G, B, R, R, R, Y",
+                    errorIndex = 1,
+                    maxLengthCompleted = 7
+                )
             ),
-            goToGameScreen = {}
+            goToGameScreen = {},
+            goToDetailScreen = {}
         )
     }
 }

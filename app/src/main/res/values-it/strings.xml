@@ -4,4 +4,9 @@
     <string name="end_game_btn">Fine Partita</string>
     <string name="history_title_text">Storico partite</string>
     <string name="start_game">Inizia Partita</string>
+    <string name="back">Indietro</string>
+    <string name="match_info">Informazioni Partita</string>
+    <string name="final_sequence">Sequenza finale</string>
+    <string name="error_index">Indice dell\'errore</string>
+    <string name="max_length">Lunghezza massima</string>
 </resources>

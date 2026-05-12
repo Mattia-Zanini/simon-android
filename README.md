@@ -10,6 +10,8 @@ Applicazione Android che implementa una variante del gioco "Simon" per il corso 
 
 ## 📋 Descrizione del Progetto
 
-I dettagli completi della consegna sono disponibili nel documento: [Project ESP2526 1 (intermediate).pdf](Project%20ESP2526%201%20(intermediate).pdf)
+I dettagli completi della consegna sono disponibili nei documenti:
+- [Project ESP2526 1 (intermedia).pdf](Project%20ESP2526%201%20(intermediate).pdf)
+- [Project ESP2526 2 (finale).pdf](Project%20ESP2526%202%20(final).pdf)
 
 
