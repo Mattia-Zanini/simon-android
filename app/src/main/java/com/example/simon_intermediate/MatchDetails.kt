@@ -68,11 +68,7 @@ class MatchDetail : ComponentActivity() {
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding),
-                        matchInformations = matchInfo,
-                        goToHomeScreen = {
-                            Log.d(tagMatchDetail, "going back to MainActivity")
-                            finish() // ritorna all'activity precedente
-                        }
+                        matchInformations = matchInfo
                     )
                 }
             }
@@ -83,8 +79,7 @@ class MatchDetail : ComponentActivity() {
 @Composable
 fun DetailScreen(
     modifier: Modifier = Modifier,
-    matchInformations: Match,
-    goToHomeScreen: () -> Unit
+    matchInformations: Match
 ) {
     Column(
         modifier = modifier
@@ -103,20 +98,6 @@ fun DetailScreen(
 
         // Info della singola partita
         GameInfo(matchInformations)
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Bottone "Back"
-        Button(
-            onClick = goToHomeScreen,
-            modifier = Modifier,
-            colors = ButtonDefaults.filledTonalButtonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ),
-        ) {
-            Text(stringResource(R.string.back))
-        }
     }
 }
 
@@ -150,8 +131,6 @@ fun InfoRow(label: String, value: String) {
         Text(
             text = value,
             style = MaterialTheme.typography.bodyLarge,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -166,8 +145,7 @@ fun DetailScreenPreview() {
                 "Y, G, B, B, M, M, R, B, G, Y, C",
                 5,
                 10
-            ),
-            goToHomeScreen = { }
+            )
         )
     }
 }

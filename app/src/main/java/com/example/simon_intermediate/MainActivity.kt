@@ -1,5 +1,6 @@
 package com.example.simon_intermediate
 
+import android.app.ComponentCaller
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -42,6 +43,7 @@ import kotlin.collections.arrayListOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.example.simon_intermediate.data.MatchDao
 
 // Tag per il logger di debug di MainActivity
 const val tagMainActivity = "MainActivity"
@@ -59,6 +61,7 @@ class MainActivity : ComponentActivity() {
 
         // Ottengo direttamente il DAO tramite il Singleton
         val dao = AppDatabase.getDatabaseDao(this)
+        Log.d(tagMainActivity, "Ottenuto il dao per il database")
 
         // Uso lifecycleScope (coroutine) per il reperimento in modo asincrono della lista delle partite dal database
         lifecycleScope.launch {
@@ -66,9 +69,12 @@ class MainActivity : ComponentActivity() {
             val data = withContext(Dispatchers.IO) {
                 dao.getAll()
             }
+
             // Qui siamo di nuovo sul Main Thread, quindi possiamo aggiornare la UI
-            historyData = data
-            Log.d(tagMainActivity, "Numero di elementi nel DB: ${historyData.size}")
+            withContext(Dispatchers.Main) {
+                historyData = data
+                Log.d(tagMainActivity, "Numero di elementi nel DB: ${historyData.size}")
+            }
         }
 
         setContent {
@@ -96,6 +102,29 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
+            }
+        }
+    }
+
+    // Per recuperare correttamente i dati del database quando l'activity si riprende dallo stack
+    override fun onResume() {
+        super.onResume()
+
+        // Ottengo direttamente il DAO tramite il Singleton
+        val dao = AppDatabase.getDatabaseDao(this)
+        Log.d(tagMainActivity, "Ottenuto il dao per il database")
+
+        // Uso lifecycleScope (coroutine) per il reperimento in modo asincrono della lista delle partite dal database
+        lifecycleScope.launch {
+            // withContext(Dispatchers.IO) sposta l'esecuzione su un thread dedicato all'I/O
+            val data = withContext(Dispatchers.IO) {
+                dao.getAll()
+            }
+
+            // Qui siamo di nuovo sul Main Thread, quindi possiamo aggiornare la UI
+            withContext(Dispatchers.Main) {
+                historyData = data
+                Log.d(tagMainActivity, "Numero di elementi nel DB: ${historyData.size}")
             }
         }
     }

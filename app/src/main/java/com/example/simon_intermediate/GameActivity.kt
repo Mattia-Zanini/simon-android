@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +44,9 @@ import kotlinx.coroutines.withContext
 import com.example.simon_intermediate.ui.theme.SimonIntermediateTheme
 import com.example.simon_intermediate.data.Match
 import com.example.simon_intermediate.data.AppDatabase
+import kotlinx.coroutines.delay
+import kotlin.random.Random
+import kotlin.text.split
 
 // Tag per il logger di debug di GameActivity
 const val tagGameActivity = "GameActivity"
@@ -84,12 +88,18 @@ class GameActivity : ComponentActivity() {
                         insertMatch = { matchToInsert: Match ->
                             //  esegue l'inserimento nel database e, solo al termine del salvataggio,
                             //  torna sul thread principale (Dispatchers.Main) per chiudere l'activity con finish().
-                            lifecycleScope.launch(Dispatchers.IO) {
-                                dao.insert(matchToInsert)
-                                withContext(Dispatchers.Main) {
-                                    Log.d(tagGameActivity, "going back to MainActivity")
-                                    finish() // ritorna all'activity precedente
+                            if (matchToInsert.maxLengthCompleted > 0) {
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    dao.insert(matchToInsert)
+                                    withContext(Dispatchers.Main) {
+                                        Log.d(tagGameActivity, "going back to MainActivity")
+                                        finish() // ritorna all'activity precedente
+                                    }
                                 }
+                            } else {
+                                // torno al MainActivity senza salvare alcun dato
+                                Log.d(tagGameActivity, "going back to MainActivity")
+                                finish()
                             }
                         }
                     )
@@ -109,21 +119,80 @@ fun GameScreen(
     val orientation = LocalConfiguration.current.orientation
     val isPortrait: Boolean = orientation == Configuration.ORIENTATION_PORTRAIT
 
-    // Stato per memorizzare la sequenza di colori cliccati
-    var txt by rememberSaveable { mutableStateOf("") }
-
+    // contiene la sequenza che il computer genera e mostra all'utente
+    var gameSequence by rememberSaveable { mutableStateOf("") }
+    // contiene la sequenza che l'utente ha cliccato
+    var userSequence by rememberSaveable { mutableStateOf("") }
     // false se il computer sta riproducendo la sequenza, true se tocca all'utente
     var isPlayerTurn by rememberSaveable { mutableStateOf(false) }
-
     // Contiene la label del colore che il computer sta mostrando (es. "R")
     var activeColorLabel by rememberSaveable { mutableStateOf<String?>(null) }
-
     // Rappresenta l'index della sequenza che il computer ha appena mostrato
-    var computerIndex by rememberSaveable { mutableIntStateOf(-1) }
+    var computerIndex by rememberSaveable { mutableIntStateOf(0) }
+    // indica dove è arrivato l'utente nel riprodurre la sequenza
+    var playerIndex by rememberSaveable { mutableIntStateOf(0) }
+    // mantiene lo stato in cui si trova il gioco, se in pausa oppure no
+    var isGamePaused by rememberSaveable { mutableStateOf(false) }
+    // tiene lo stato di gioco di fine partita o partita in corso
+    var isGameOver by rememberSaveable { mutableStateOf(false) }
+    // solo il giocare può decidere quando iniziare la partita
+    var isGameStarted by rememberSaveable { mutableStateOf(false) }
 
-    // test dell'active color
-    activeColorLabel = "R"
-    computerIndex = 0
+    // startComputer
+    LaunchedEffect(isGameStarted, isPlayerTurn, isGamePaused, isGameOver) {
+        // turno del computer E il gioco NON è in pausa E non è finito
+        if (isGameStarted && !isPlayerTurn && !isGamePaused && !isGameOver) {
+            if (gameSequence.isEmpty()) {
+                // inizializzo la sequenza di gioco se è vuota (inizio partita)
+                gameSequence = simonBtns.random().label
+                Log.d(tagGameActivity, "Impostata la sequenza iniziale")
+            }
+
+            Log.d(tagGameActivity, "Sequenza corrente: $gameSequence")
+
+            while (computerIndex < gameSequence.length) {
+                activeColorLabel = gameSequence[computerIndex].toString()
+                delay(1000) // acceso
+                activeColorLabel = null
+                delay(500) // pausa tra i colori
+
+                if (isGamePaused) break // se l'utente preme pausa, esce dal loop
+
+                Log.d(tagGameActivity, "Indice sequenza computer: [$computerIndex]")
+                computerIndex++
+            }
+
+            if (computerIndex >= gameSequence.length) {
+                isPlayerTurn = true // ora tocca all'utente
+                computerIndex = 0  // reset per la prossima sequenza
+                Log.d(tagGameActivity, "Il computer ha finito la sequenza e resettato le variabili")
+            }
+        }
+
+
+        // gestisce la fine del gioco
+        if (isGameOver) {
+            // il gioco è fermo e i tasti diventano rossi
+            delay(2000)
+
+            // prepara i dati per il salvataggio
+            val seqNum = gameSequence.count()
+            var gameSequenceToSave = gameSequence[0].toString()
+            repeat(seqNum - 1) { i ->
+                gameSequenceToSave += ", ${gameSequence[i + 1]}"
+            }
+
+            // Creazione dell'oggetto Match con la sequenza attuale
+            val currentMatch = Match(
+                finalSequence = gameSequenceToSave,
+                errorIndex = playerIndex,
+                maxLengthCompleted = gameSequence.length - 1
+            )
+
+            // Chiamo la lambda insertMatch che si occupa del salvataggio asincrono e della chiusura dell'Activity
+            insertMatch(currentMatch)
+        }
+    }
 
     // Assegno il numero di colonne e di righe
     val cols = 3
@@ -132,31 +201,81 @@ fun GameScreen(
     // Altezza variabile per la TextBox a seconda dell'orientamento
     val textBoxHeight = if (isPortrait) 180.dp else 200.dp
 
-    // Queste sono le lambda che vengono utilizzate in entrambe le situazioni (sia portrait che landscape)
-    val onColorClick: (String) -> Unit = { color ->
-        txt += if (txt.isEmpty()) color else ", $color"
-        Log.d(tagGameActivity, "BTN '$color' clicked")
+    val onStartClick: () -> Unit = {
+        Log.d(tagGameActivity, "BTN 'Start' clicked")
+
+        isPlayerTurn = false
+        isGameStarted = true
     }
 
-    val onDeleteClick: () -> Unit = {
-        txt = "" // ripulisco la text
-        Log.d(tagGameActivity, "BTN 'Delete' clicked")
+    val onPauseClick: () -> Unit = {
+        Log.d(tagGameActivity, "BTN 'Pause' clicked")
+
+        isGamePaused = true
+    }
+
+    val onContinueClick: () -> Unit = {
+        Log.d(tagGameActivity, "BTN 'Continue' clicked")
+
+        isGamePaused = false
     }
 
     val onEndClick: () -> Unit = {
         Log.d(tagGameActivity, "BTN 'End Game' clicked")
 
+        isGameOver = true
+        isPlayerTurn = false
+    }
+
+    val onEndClick2: () -> Unit = {
+        Log.d(tagGameActivity, "BTN 'End Game' clicked")
+
+        isGameOver = true
+        isPlayerTurn = false
+
+        // converto la gameSequence nel formato stringa che salvo nel db
+        val seqNum = gameSequence.count()
+        var gameSequenceToSave = gameSequence[0].toString() // la inizializzo con la prima stringa
+        repeat(seqNum - 1) { i ->
+            gameSequenceToSave += ", ${gameSequence[i]}"
+        }
+
         // Creazione dell'oggetto Match con la sequenza attuale
         val currentMatch = Match(
-            finalSequence = txt,
-            errorIndex = 0,
-            maxLengthCompleted = txt.length - 1
+            finalSequence = gameSequenceToSave,
+            errorIndex = playerIndex,
+            maxLengthCompleted = gameSequence.length - 1
         )
-
-        txt = ""
 
         // Chiamo la lambda insertMatch che si occupa del salvataggio asincrono e della chiusura dell'Activity
         insertMatch(currentMatch)
+    }
+
+    // Logica di controllo di vittoria, colore corretto e sconfitta dell'utente
+    val onColorClick: (String) -> Unit = { color ->
+        Log.d(tagGameActivity, "BTN '$color' clicked")
+
+        if (color == gameSequence[playerIndex].toString()) {
+            Log.d(tagGameActivity, "L'utente ha cliccato il colore corretto")
+
+            playerIndex++
+            userSequence += color
+        } else {
+            Log.d(tagGameActivity, "L'utente ha sbagliato colore")
+
+            onEndClick()
+        }
+
+        if (playerIndex == gameSequence.length) {
+            Log.d(
+                tagGameActivity,
+                "L'utente ha completato la sequenza correttamente: $gameSequence"
+            )
+            isPlayerTurn = false
+            gameSequence += simonBtns.random().label // aggiungo un colore addizionale random
+            playerIndex = 0
+            userSequence = "" // ripulisco la sequenza dell'utente
+        }
     }
 
     if (isPortrait) {
@@ -173,6 +292,8 @@ fun GameScreen(
                 cols,
                 simonBtns,
                 isPlayerTurn,
+                isGamePaused,
+                isGameOver,
                 activeColorLabel,
                 onColorClick
             )
@@ -183,12 +304,16 @@ fun GameScreen(
                     .fillMaxWidth()
                     .height(textBoxHeight)
                     .padding(vertical = 16.dp),
-                txt
+                userSequence
             )
 
             // Zona pulsanti di controllo
             ActionButtons(
-                onDelete = onDeleteClick,
+                isComputerTurn = (!isPlayerTurn && isGameStarted && !isGameOver),
+                isPaused = isGamePaused,
+                onStart = onStartClick,
+                onPause = onPauseClick,
+                onContinue = onContinueClick,
                 onEnd = onEndClick
             )
         }
@@ -207,6 +332,8 @@ fun GameScreen(
                 cols,
                 simonBtns,
                 isPlayerTurn,
+                isGamePaused,
+                isGameOver,
                 activeColorLabel,
                 onColorClick
             )
@@ -221,14 +348,18 @@ fun GameScreen(
                     Modifier
                         .fillMaxWidth()
                         .height(textBoxHeight),
-                    txt
+                    userSequence
                 )
 
                 // Lo Spacer "mangia" tutto lo spazio che avanza tra la TextBox e l'ActionButtons
                 Spacer(modifier = Modifier.weight(1f))
 
                 ActionButtons(
-                    onDelete = onDeleteClick,
+                    isComputerTurn = (!isPlayerTurn && isGameStarted && !isGameOver),
+                    isPaused = isGamePaused,
+                    onStart = onStartClick,
+                    onPause = onPauseClick,
+                    onContinue = onContinueClick,
                     onEnd = onEndClick
                 )
             }
@@ -243,6 +374,8 @@ fun ColorGrid(
     cols: Int,
     buttonsList: List<SimonButton>,
     isPlayerTurn: Boolean,
+    isPaused: Boolean,
+    isOver: Boolean,
     activeColorLabel: String?,
     onButtonClick: (String) -> Unit
 ) {
@@ -259,9 +392,23 @@ fun ColorGrid(
                 repeat(rows) {
                     val i = index
 
-                    val activeColor = buttonsList[i].color
-                    val disabledColor = buttonsList[i].colorShadowed
+                    val grayColor = Color.LightGray
+                    val errorColor = Color(0xFFCE0000)
                     val btnLabel = buttonsList[i].label
+
+                    // colori di default
+                    var activeColor = buttonsList[i].color
+                    var disabledColor = buttonsList[i].colorShadowed
+
+                    // assegno i colori dei pulsanti a seconda dello stato del gioco
+                    if (isPaused) {
+                        activeColor = grayColor
+                        disabledColor = grayColor
+                    }
+                    if (isOver) {
+                        activeColor = errorColor
+                        disabledColor = errorColor
+                    }
 
                     val isThisButtonActive = btnLabel == activeColorLabel
 
@@ -314,7 +461,14 @@ fun TextBox(modifier: Modifier = Modifier, txt: String) {
 
 // Zona dei pulsanti che gestiscono la pulizia della sequenza o il salvataggio della partita corrente allo storico
 @Composable
-fun ActionButtons(onDelete: () -> Unit, onEnd: () -> Unit) {
+fun ActionButtons(
+    isComputerTurn: Boolean,
+    isPaused: Boolean,
+    onStart: () -> Unit,
+    onPause: () -> Unit,
+    onContinue: () -> Unit,
+    onEnd: () -> Unit
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
 
@@ -322,11 +476,21 @@ fun ActionButtons(onDelete: () -> Unit, onEnd: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Button(
-            onClick = onDelete,
+            onClick = onStart,
             colors = ButtonDefaults.filledTonalButtonColors(MaterialTheme.colorScheme.primary),
         ) {
             Text(
-                stringResource(R.string.delete_btn),
+                stringResource(R.string.start_game),
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+        }
+        Button(
+            onClick = if (!isPaused) onPause else onContinue,
+            enabled = isComputerTurn,
+            colors = ButtonDefaults.filledTonalButtonColors(MaterialTheme.colorScheme.primary),
+        ) {
+            Text(
+                text = if (!isPaused) stringResource(R.string.pause_game) else stringResource(R.string.continue_game),
                 color = MaterialTheme.colorScheme.onPrimary
             )
         }
