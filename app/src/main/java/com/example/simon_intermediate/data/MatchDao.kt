@@ -11,8 +11,9 @@ interface MatchDao {
     @Insert
     suspend fun insert(currentMatch: Match)
 
-    // Recupera tutte le righe dalla tabella
-    @Query("SELECT * FROM gameHistory")
+    // Recupera tutte le righe dalla tabella, ho messo ordine DECRESCENTE
+    // così mostra la partita più recente in cima alla lista
+    @Query("SELECT * FROM gameHistory ORDER BY id DESC")
     suspend fun getAll(): List<Match>
 
     // Inserisce una nuova riga nel database

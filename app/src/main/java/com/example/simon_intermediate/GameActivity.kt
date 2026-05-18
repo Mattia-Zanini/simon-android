@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -91,6 +92,11 @@ class GameActivity : ComponentActivity() {
                             if (matchToInsert.maxLengthCompleted > 0) {
                                 lifecycleScope.launch(Dispatchers.IO) {
                                     dao.insert(matchToInsert)
+                                    Log.d(
+                                        tagGameActivity,
+                                        "Inserted the following match: $matchToInsert"
+                                    )
+
                                     withContext(Dispatchers.Main) {
                                         Log.d(tagGameActivity, "going back to MainActivity")
                                         finish() // ritorna all'activity precedente
@@ -101,7 +107,8 @@ class GameActivity : ComponentActivity() {
                                 Log.d(tagGameActivity, "going back to MainActivity")
                                 finish()
                             }
-                        }
+                        },
+                        systemFinish = { finish() }
                     )
                 }
             }
@@ -113,7 +120,8 @@ class GameActivity : ComponentActivity() {
 fun GameScreen(
     modifier: Modifier = Modifier,
     simonBtns: List<SimonButton>,
-    insertMatch: (Match) -> Unit
+    insertMatch: (Match) -> Unit,
+    systemFinish: () -> Unit
 ) {
     // Recupero l'orientamento attuale del dispositivo
     val orientation = LocalConfiguration.current.orientation
@@ -138,9 +146,10 @@ fun GameScreen(
     // solo il giocare può decidere quando iniziare la partita
     var isGameStarted by rememberSaveable { mutableStateOf(false) }
 
-    // startComputer
+
+    // ----- LOGICA DEL COMPUTER ------
     LaunchedEffect(isGameStarted, isPlayerTurn, isGamePaused, isGameOver) {
-        // turno del computer E il gioco NON è in pausa E non è finito
+        // turno del computer, il gioco NON è in pausa E non è finito
         if (isGameStarted && !isPlayerTurn && !isGamePaused && !isGameOver) {
             if (gameSequence.isEmpty()) {
                 // inizializzo la sequenza di gioco se è vuota (inizio partita)
@@ -150,6 +159,7 @@ fun GameScreen(
 
             Log.d(tagGameActivity, "Sequenza corrente: $gameSequence")
 
+            delay(600) // delay iniziale, giusto per non avere il bottone subito accesso all'inizio
             while (computerIndex < gameSequence.length) {
                 activeColorLabel = gameSequence[computerIndex].toString()
                 delay(1000) // acceso
@@ -176,23 +186,29 @@ fun GameScreen(
             delay(2000)
 
             // prepara i dati per il salvataggio
-            val seqNum = gameSequence.count()
-            var gameSequenceToSave = gameSequence[0].toString()
-            repeat(seqNum - 1) { i ->
-                gameSequenceToSave += ", ${gameSequence[i + 1]}"
+            val seqNum = gameSequence.length
+            var gameSequenceToSave = ""
+
+            // nel caso in cui la stringa non sia vuota allora la salvo nel modo standard
+            if (seqNum > 0) {
+                gameSequenceToSave = gameSequence[0].toString()
+                repeat(seqNum - 1) { i ->
+                    gameSequenceToSave += ", ${gameSequence[i + 1]}"
+                }
             }
 
             // Creazione dell'oggetto Match con la sequenza attuale
             val currentMatch = Match(
                 finalSequence = gameSequenceToSave,
-                errorIndex = playerIndex,
-                maxLengthCompleted = gameSequence.length - 1
+                errorIndex = userSequence.length,
+                maxLengthCompleted = seqNum - 1
             )
 
             // Chiamo la lambda insertMatch che si occupa del salvataggio asincrono e della chiusura dell'Activity
             insertMatch(currentMatch)
         }
     }
+
 
     // Assegno il numero di colonne e di righe
     val cols = 3
@@ -227,30 +243,6 @@ fun GameScreen(
         isPlayerTurn = false
     }
 
-    val onEndClick2: () -> Unit = {
-        Log.d(tagGameActivity, "BTN 'End Game' clicked")
-
-        isGameOver = true
-        isPlayerTurn = false
-
-        // converto la gameSequence nel formato stringa che salvo nel db
-        val seqNum = gameSequence.count()
-        var gameSequenceToSave = gameSequence[0].toString() // la inizializzo con la prima stringa
-        repeat(seqNum - 1) { i ->
-            gameSequenceToSave += ", ${gameSequence[i]}"
-        }
-
-        // Creazione dell'oggetto Match con la sequenza attuale
-        val currentMatch = Match(
-            finalSequence = gameSequenceToSave,
-            errorIndex = playerIndex,
-            maxLengthCompleted = gameSequence.length - 1
-        )
-
-        // Chiamo la lambda insertMatch che si occupa del salvataggio asincrono e della chiusura dell'Activity
-        insertMatch(currentMatch)
-    }
-
     // Logica di controllo di vittoria, colore corretto e sconfitta dell'utente
     val onColorClick: (String) -> Unit = { color ->
         Log.d(tagGameActivity, "BTN '$color' clicked")
@@ -259,7 +251,7 @@ fun GameScreen(
             Log.d(tagGameActivity, "L'utente ha cliccato il colore corretto")
 
             playerIndex++
-            userSequence += color
+            userSequence += if (userSequence.isEmpty()) color else ", $color"
         } else {
             Log.d(tagGameActivity, "L'utente ha sbagliato colore")
 
@@ -277,6 +269,24 @@ fun GameScreen(
             userSequence = "" // ripulisco la sequenza dell'utente
         }
     }
+
+
+    // sostituzione del tasto "Back" del sistema
+    BackHandler(enabled = true) {
+        // Se la partita è in corso, clicco virtualmente Fine Partita
+        if (isGameStarted) {
+            Log.d(tagGameActivity, "Back pressed: triggering end game")
+
+            onEndClick()
+        }
+
+        // se non è iniziata la partita allora chiudo l'activity
+        if (!isGameStarted) {
+            systemFinish()
+        }
+    }
+
+
 
     if (isPortrait) {
         // ----- LAYOUT PORTRAIT -----
@@ -310,6 +320,7 @@ fun GameScreen(
             // Zona pulsanti di controllo
             ActionButtons(
                 isComputerTurn = (!isPlayerTurn && isGameStarted && !isGameOver),
+                isStarted = isGameStarted,
                 isPaused = isGamePaused,
                 onStart = onStartClick,
                 onPause = onPauseClick,
@@ -356,6 +367,7 @@ fun GameScreen(
 
                 ActionButtons(
                     isComputerTurn = (!isPlayerTurn && isGameStarted && !isGameOver),
+                    isStarted = isGameStarted,
                     isPaused = isGamePaused,
                     onStart = onStartClick,
                     onPause = onPauseClick,
@@ -463,6 +475,7 @@ fun TextBox(modifier: Modifier = Modifier, txt: String) {
 @Composable
 fun ActionButtons(
     isComputerTurn: Boolean,
+    isStarted: Boolean,
     isPaused: Boolean,
     onStart: () -> Unit,
     onPause: () -> Unit,
@@ -477,6 +490,7 @@ fun ActionButtons(
     ) {
         Button(
             onClick = onStart,
+            enabled = !isStarted,
             colors = ButtonDefaults.filledTonalButtonColors(MaterialTheme.colorScheme.primary),
         ) {
             Text(
@@ -496,6 +510,7 @@ fun ActionButtons(
         }
         Button(
             onClick = onEnd,
+            enabled = isStarted,
             colors = ButtonDefaults.filledTonalButtonColors(MaterialTheme.colorScheme.primary),
         ) {
             Text(
@@ -518,5 +533,5 @@ fun MainScreenPreview() {
         SimonButton("C", Color.Cyan, Color(0xFF33AAAA))
     )
 
-    GameScreen(simonBtns = demoButtons, insertMatch = {})
+    GameScreen(simonBtns = demoButtons, insertMatch = {}, systemFinish = {})
 }

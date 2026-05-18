@@ -99,7 +99,32 @@ class MainActivity : ComponentActivity() {
                             )
                             Log.d(tagMainActivity, "startActivity of MatchDetail")
                             startActivity(myIntent)
+                        },
+
+
+                        // DA RIMUOVERE ALLA FINE DEL PROGETTO (SOLO DEV)!!!!!!
+                        deleteAll = {
+                            lifecycleScope.launch {
+                                withContext(Dispatchers.IO) { dao.deleteAll() }
+                                withContext(Dispatchers.Main) {
+                                    Log.d(
+                                        tagMainActivity,
+                                        "Eliminati tutti i record presenti nel database"
+                                    )
+                                }
+
+                                // ri-getto i dati nel db
+                                val data = withContext(Dispatchers.IO) { dao.getAll() }
+                                withContext(Dispatchers.Main) {
+                                    historyData = data
+                                    Log.d(
+                                        tagMainActivity,
+                                        "Numero di elementi nel DB: ${historyData.size}"
+                                    )
+                                }
+                            }
                         }
+                        // ----------------------------------------------------------------------
                     )
                 }
             }
@@ -112,7 +137,7 @@ class MainActivity : ComponentActivity() {
 
         // Ottengo direttamente il DAO tramite il Singleton
         val dao = AppDatabase.getDatabaseDao(this)
-        Log.d(tagMainActivity, "Ottenuto il dao per il database")
+        Log.d(tagMainActivity, "Database DAO obtained")
 
         // Uso lifecycleScope (coroutine) per il reperimento in modo asincrono della lista delle partite dal database
         lifecycleScope.launch {
@@ -124,7 +149,7 @@ class MainActivity : ComponentActivity() {
             // Qui siamo di nuovo sul Main Thread, quindi possiamo aggiornare la UI
             withContext(Dispatchers.Main) {
                 historyData = data
-                Log.d(tagMainActivity, "Numero di elementi nel DB: ${historyData.size}")
+                Log.d(tagMainActivity, "Number of items in DB: ${historyData.size}")
             }
         }
     }
@@ -135,7 +160,8 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     historyList: List<Match>,
     goToGameScreen: () -> Unit,
-    goToDetailScreen: (Int) -> Unit
+    goToDetailScreen: (Int) -> Unit,
+    deleteAll: () -> Unit
 ) {
     Column(
         modifier = modifier
@@ -174,6 +200,16 @@ fun HomeScreen(
             ) {
                 Text(
                     stringResource(R.string.start_game),
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+            // PULSANTE DA TOGLIERE PRIMA DI CONDIVIDERE IL PROGETTO COME FINITO!!!!!
+            Button(
+                onClick = deleteAll,
+                colors = ButtonDefaults.filledTonalButtonColors(MaterialTheme.colorScheme.primary),
+            ) {
+                Text(
+                    "Delete ALL",
                     color = MaterialTheme.colorScheme.onPrimary
                 )
             }
@@ -237,7 +273,8 @@ fun HomeScreenPreview() {
                 )
             ),
             goToGameScreen = {},
-            goToDetailScreen = {}
+            goToDetailScreen = {},
+            deleteAll = {}
         )
     }
 }

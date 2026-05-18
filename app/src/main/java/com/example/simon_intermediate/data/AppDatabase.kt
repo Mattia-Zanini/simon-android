@@ -21,7 +21,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         // Metodo per ottenere direttamente il DAO legato al database (Singleton)
         fun getDatabaseDao(context: Context): MatchDao {
-            Log.d(dbTAG, "Invocato metodo per ottenere il Dao del database, contesto: $context")
+            Log.d(dbTAG, "Invoked method to obtain database DAO; context: $context")
 
             // Primo controllo: se il database non esiste, lo creo in modo sicuro
             if (dbInstance == null) {
@@ -34,8 +34,8 @@ abstract class AppDatabase : RoomDatabase() {
                             AppDatabase::class.java,
                             "simon-db"
                         )
-                        .fallbackToDestructiveMigration(dropAllTables = true) // LA TENGO PER IL DEVELOP, al momento di distruggere il database per un cambio di versione non gestito, Room elimina tutte le tabelle presenti nel db
-                        .build()
+                            .fallbackToDestructiveMigration(dropAllTables = true) // LA TENGO PER IL DEVELOP, al momento di distruggere il database per un cambio di versione non gestito, Room elimina tutte le tabelle presenti nel db
+                            .build()
                     }
                 }
             }

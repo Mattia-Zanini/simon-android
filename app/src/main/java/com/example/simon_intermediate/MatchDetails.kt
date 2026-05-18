@@ -7,13 +7,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -21,9 +20,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.example.simon_intermediate.data.Match
 import com.example.simon_intermediate.data.AppDatabase
@@ -34,12 +33,17 @@ import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 
 // Tag per il logger di debug di MatchDetail
 const val tagMatchDetail = "MatchDetail"
 
 class MatchDetail : ComponentActivity() {
-    private var matchInfo by mutableStateOf(Match(-1, "not available", -1, -1))
+    private var matchInfo by mutableStateOf(Match(-1, "not available", 0, -1))
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,15 +54,16 @@ class MatchDetail : ComponentActivity() {
 
         // Imposto il valore di default così che posso gestire il caso in cui non venga passato nulla, anche se è una situazione che al 100% NON succederà
         val matchID = intent.getIntExtra(MATCHEXTRA, -1)
+        Log.d(tagMatchDetail, "Match ID: $matchID")
 
         val dao = AppDatabase.getDatabaseDao(this)
 
         lifecycleScope.launch {
-            val data = withContext(Dispatchers.IO) {
-                dao.getMatchInfo(matchID)
+            val data = withContext(Dispatchers.IO) { dao.getMatchInfo(matchID) }
+            withContext(Dispatchers.Main) {
+                matchInfo = data
+                Log.d(tagMatchDetail, "Match data retrieved from DB: $matchInfo")
             }
-            matchInfo = data
-            Log.d(tagMatchDetail, "Recuperati i dati del match dal DB: $matchInfo")
         }
 
         setContent {
@@ -104,33 +109,77 @@ fun DetailScreen(
 @Composable
 fun GameInfo(matchInformations: Match) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val fSequence = matchInformations.finalSequence.split(", ")
+
+        // prendo la parte di sequenza corretta (dall'inizio fino all'indice dell'errore escluso)
+        val parteCorretta = fSequence
+            .subList(0, matchInformations.errorIndex)
+            .joinToString(", ")
+
+        // prendo la parte di sequenza sbagliata (dall'indice dell'errore fino alla fine)
+        val parteErrata = fSequence
+            .subList(matchInformations.errorIndex, fSequence.size)
+            .joinToString(", ")
+
+        val sequenzeColorata = buildAnnotatedString {
+            // inserisco la parte corretta con il colore di default
+            withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.onSurface)) {
+                append(parteCorretta)
+            }
+
+            // congiungo le due metà solo nel caso in cui nessuna delle due sia vuota
+            if (parteErrata.count() != 0 && parteCorretta.count() != 0)
+                withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.onSurface)) {
+                    append(", ")
+                }
+
+            // aggiungo la parte dall'errore in poi con un SpanStyle di colore diverso
+            withStyle(style = SpanStyle(color = Color.Red)) { append(parteErrata) }
+        }
+
         InfoRow(
             label = stringResource(R.string.final_sequence),
-            value = matchInformations.finalSequence
+            value = sequenzeColorata
         )
         InfoRow(
             label = stringResource(R.string.error_index),
-            value = matchInformations.errorIndex.toString()
+            value = buildAnnotatedString {
+                withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.onSurface)) {
+                    append(matchInformations.errorIndex.toString())
+                }
+            }
         )
         InfoRow(
             label = stringResource(R.string.max_length),
-            value = matchInformations.maxLengthCompleted.toString()
+            value = buildAnnotatedString {
+                withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.onSurface)) {
+                    append(matchInformations.maxLengthCompleted.toString())
+                }
+            }
         )
     }
 }
 
 // Composable per rendere i testi più leggibili
 @Composable
-fun InfoRow(label: String, value: String) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+fun InfoRow(label: String, value: AnnotatedString) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.secondary
+            text = "$label:",
+            // https://developer.android.com/develop/ui/compose/designsystems/material3#typography
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(0.4f)
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp),
+            modifier = Modifier.weight(0.6f)
         )
     }
 }
@@ -142,8 +191,8 @@ fun DetailScreenPreview() {
         DetailScreen(
             matchInformations = Match(
                 -1,
-                "Y, G, B, B, M, M, R, B, G, Y, C",
-                5,
+                "Y, G, B, B, M, M, R, B, G, Y, C, B, M, M, Y, R",
+                0,
                 10
             )
         )
