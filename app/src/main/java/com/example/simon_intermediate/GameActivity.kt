@@ -55,10 +55,13 @@ const val tagGameActivity = "GameActivity"
 data class SimonButton(
     val label: String,
     val color: Color,
-    val colorShadowed: Color
+    val colorShadowed: Color,
+    val sound: SimonSound
 )
 
 class GameActivity : ComponentActivity() {
+    private lateinit var simonButtons: List<SimonButton>
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -67,13 +70,13 @@ class GameActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val dao = AppDatabase.getDatabaseDao(this)
-        val simonButtons = listOf(
-            SimonButton("R", Color.Red, Color(0xFFAA3333)),
-            SimonButton("G", Color.Green, Color(0xFF338833)),
-            SimonButton("B", Color.Blue, Color(0xFF3333AA)),
-            SimonButton("M", Color.Magenta, Color(0xF9AA33AA)),
-            SimonButton("Y", Color.Yellow, Color(0xFFAAAA33)),
-            SimonButton("C", Color.Cyan, Color(0xFF33AAAA))
+        simonButtons = listOf(
+            SimonButton("R", Color.Red, Color(0xFFAA3333), SimonSound(261.63)), // Do
+            SimonButton("G", Color.Green, Color(0xFF338833), SimonSound(293.66)), // Re
+            SimonButton("B", Color.Blue, Color(0xFF3333AA), SimonSound(329.63)), // Mi
+            SimonButton("M", Color.Magenta, Color(0xF9AA33AA), SimonSound(349.23)), // Fa
+            SimonButton("Y", Color.Yellow, Color(0xFFAAAA33), SimonSound(392.00)), // Sol
+            SimonButton("C", Color.Cyan, Color(0xFF33AAAA), SimonSound(440.00)) // La
         )
 
         setContent {
@@ -114,6 +117,27 @@ class GameActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+
+        Log.d(tagGameActivity, "onResume called")
+
+        // serve a verificare se una variabile dichiarata come lateinit è già stata inizializzata oppure no
+        if (this::simonButtons.isInitialized) {
+            simonButtons.forEach { it.sound.prepare() }
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+
+        Log.d(tagGameActivity, "onPause called")
+
+        if (::simonButtons.isInitialized) {
+            simonButtons.forEach { it.sound.release() }
+        }
+    }
 }
 
 @Composable
@@ -129,20 +153,28 @@ fun GameScreen(
 
     // contiene la sequenza che il computer genera e mostra all'utente
     var gameSequence by rememberSaveable { mutableStateOf("") }
+
     // contiene la sequenza che l'utente ha cliccato
     var userSequence by rememberSaveable { mutableStateOf("") }
+
     // false se il computer sta riproducendo la sequenza, true se tocca all'utente
     var isPlayerTurn by rememberSaveable { mutableStateOf(false) }
+
     // Contiene la label del colore che il computer sta mostrando (es. "R")
     var activeColorLabel by rememberSaveable { mutableStateOf<String?>(null) }
+
     // Rappresenta l'index della sequenza che il computer ha appena mostrato
     var computerIndex by rememberSaveable { mutableIntStateOf(0) }
+
     // indica dove è arrivato l'utente nel riprodurre la sequenza
     var playerIndex by rememberSaveable { mutableIntStateOf(0) }
+
     // mantiene lo stato in cui si trova il gioco, se in pausa oppure no
     var isGamePaused by rememberSaveable { mutableStateOf(false) }
+
     // tiene lo stato di gioco di fine partita o partita in corso
     var isGameOver by rememberSaveable { mutableStateOf(false) }
+
     // solo il giocare può decidere quando iniziare la partita
     var isGameStarted by rememberSaveable { mutableStateOf(false) }
 
@@ -154,36 +186,37 @@ fun GameScreen(
             if (gameSequence.isEmpty()) {
                 // inizializzo la sequenza di gioco se è vuota (inizio partita)
                 gameSequence = simonBtns.random().label
-                Log.d(tagGameActivity, "Impostata la sequenza iniziale")
+                Log.d(tagGameActivity, "Initial sequence set")
             }
 
-            Log.d(tagGameActivity, "Sequenza corrente: $gameSequence")
+            Log.d(tagGameActivity, "Current sequence: $gameSequence")
 
-            delay(600) // delay iniziale, giusto per non avere il bottone subito accesso all'inizio
+            delay(800) // delay iniziale, giusto per non avere il bottone subito accesso all'inizio
             while (computerIndex < gameSequence.length) {
-                activeColorLabel = gameSequence[computerIndex].toString()
+                val currentLabel = gameSequence[computerIndex].toString()
+                simonBtns.find { it.label == currentLabel }?.sound?.play()
+                activeColorLabel = currentLabel
                 delay(1000) // acceso
                 activeColorLabel = null
                 delay(500) // pausa tra i colori
 
                 if (isGamePaused) break // se l'utente preme pausa, esce dal loop
 
-                Log.d(tagGameActivity, "Indice sequenza computer: [$computerIndex]")
+                Log.d(tagGameActivity, "Computer sequence index: [$computerIndex]")
                 computerIndex++
             }
 
             if (computerIndex >= gameSequence.length) {
                 isPlayerTurn = true // ora tocca all'utente
                 computerIndex = 0  // reset per la prossima sequenza
-                Log.d(tagGameActivity, "Il computer ha finito la sequenza e resettato le variabili")
+                Log.d(tagGameActivity, "Computer finished sequence and reset variables")
             }
         }
-
 
         // gestisce la fine del gioco
         if (isGameOver) {
             // il gioco è fermo e i tasti diventano rossi
-            delay(2000)
+            delay(1000)
 
             // prepara i dati per il salvataggio
             val seqNum = gameSequence.length
@@ -246,14 +279,15 @@ fun GameScreen(
     // Logica di controllo di vittoria, colore corretto e sconfitta dell'utente
     val onColorClick: (String) -> Unit = { color ->
         Log.d(tagGameActivity, "BTN '$color' clicked")
+        simonBtns.find { it.label == color }?.sound?.play()
 
         if (color == gameSequence[playerIndex].toString()) {
-            Log.d(tagGameActivity, "L'utente ha cliccato il colore corretto")
+            Log.d(tagGameActivity, "User clicked the correct color")
 
             playerIndex++
             userSequence += if (userSequence.isEmpty()) color else ", $color"
         } else {
-            Log.d(tagGameActivity, "L'utente ha sbagliato colore")
+            Log.d(tagGameActivity, "User clicked the wrong color")
 
             onEndClick()
         }
@@ -261,7 +295,7 @@ fun GameScreen(
         if (playerIndex == gameSequence.length) {
             Log.d(
                 tagGameActivity,
-                "L'utente ha completato la sequenza correttamente: $gameSequence"
+                "User completed sequence correctly: $gameSequence"
             )
             isPlayerTurn = false
             gameSequence += simonBtns.random().label // aggiungo un colore addizionale random
@@ -525,12 +559,12 @@ fun ActionButtons(
 @Composable
 fun MainScreenPreview() {
     val demoButtons = listOf(
-        SimonButton("R", Color.Red, Color(0xFFAA3333)),
-        SimonButton("G", Color.Green, Color(0xFF338833)),
-        SimonButton("B", Color.Blue, Color(0xFF3333AA)),
-        SimonButton("M", Color.Magenta, Color(0xF9AA33AA)),
-        SimonButton("Y", Color.Yellow, Color(0xFFAAAA33)),
-        SimonButton("C", Color.Cyan, Color(0xFF33AAAA))
+        SimonButton("R", Color.Red, Color(0xFFAA3333), SimonSound(261.63)),
+        SimonButton("G", Color.Green, Color(0xFF338833), SimonSound(293.66)),
+        SimonButton("B", Color.Blue, Color(0xFF3333AA), SimonSound(329.63)),
+        SimonButton("M", Color.Magenta, Color(0xF9AA33AA), SimonSound(349.23)),
+        SimonButton("Y", Color.Yellow, Color(0xFFAAAA33), SimonSound(392.00)),
+        SimonButton("C", Color.Cyan, Color(0xFF33AAAA), SimonSound(440.00))
     )
 
     GameScreen(simonBtns = demoButtons, insertMatch = {}, systemFinish = {})

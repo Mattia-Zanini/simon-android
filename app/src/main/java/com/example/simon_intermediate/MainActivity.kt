@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
 
         // Ottengo direttamente il DAO tramite il Singleton
         val dao = AppDatabase.getDatabaseDao(this)
-        Log.d(tagMainActivity, "Ottenuto il dao per il database")
+        Log.d(tagMainActivity, "Database DAO obtained")
 
         // Uso lifecycleScope (coroutine) per il reperimento in modo asincrono della lista delle partite dal database
         lifecycleScope.launch {
@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
             // Qui siamo di nuovo sul Main Thread, quindi possiamo aggiornare la UI
             withContext(Dispatchers.Main) {
                 historyData = data
-                Log.d(tagMainActivity, "Numero di elementi nel DB: ${historyData.size}")
+                Log.d(tagMainActivity, "Number of items in DB: ${historyData.size}")
             }
         }
 
@@ -109,7 +109,7 @@ class MainActivity : ComponentActivity() {
                                 withContext(Dispatchers.Main) {
                                     Log.d(
                                         tagMainActivity,
-                                        "Eliminati tutti i record presenti nel database"
+                                        "Deleted all records from database"
                                     )
                                 }
 
@@ -119,7 +119,7 @@ class MainActivity : ComponentActivity() {
                                     historyData = data
                                     Log.d(
                                         tagMainActivity,
-                                        "Numero di elementi nel DB: ${historyData.size}"
+                                        "Number of items in DB: ${historyData.size}"
                                     )
                                 }
                             }
