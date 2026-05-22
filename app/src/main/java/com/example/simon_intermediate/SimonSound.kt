@@ -7,7 +7,7 @@ import android.util.Log
 import kotlin.math.PI
 import kotlin.math.sin
 
-// Gestisce la generazione e la riproduzione di un suono sinusoidale (nota musicale)  utilizzando AudioTrack in modalità statica.
+// Gestisce la generazione e la riproduzione di un suono sinusoidale (nota musicale)  utilizzando AudioTrack in modalità statica
 class SimonSound(private val frequenza: Double, private val durataMs: Int = 500) {
     private val tagSimonSound = this::class.simpleName
     private var audioTrack: AudioTrack? = null
@@ -17,7 +17,7 @@ class SimonSound(private val frequenza: Double, private val durataMs: Int = 500)
         prepare()
     }
 
-    // Prepara l'AudioTrack per la riproduzione. Se è già inizializzato, non fa nulla.
+    // Prepara l'AudioTrack per la riproduzione. Se è già inizializzato, non fa nulla
     fun prepare() {
         if (audioTrack == null) {
             buffer = generatePCMSineWave(frequenza, durataMs)
@@ -26,7 +26,7 @@ class SimonSound(private val frequenza: Double, private val durataMs: Int = 500)
         }
     }
 
-    // Riproduce il suono dall'inizio. Se il suono è già in riproduzione, viene riavvolto e riavviato immediatamente.
+    // Riproduce il suono dall'inizio. Se il suono è già in riproduzione, viene riavvolto e riavviato immediatamente
     fun play() {
         try {
             prepare()
@@ -40,7 +40,7 @@ class SimonSound(private val frequenza: Double, private val durataMs: Int = 500)
         }
     }
 
-    // Libera le risorse hardware associate all'AudioTrack.
+    // Libera le risorse hardware associate all'AudioTrack
     fun release() {
         audioTrack?.release()
         audioTrack = null

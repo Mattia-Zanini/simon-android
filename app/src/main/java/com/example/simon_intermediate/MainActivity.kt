@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -50,7 +52,12 @@ const val tagMainActivity = "MainActivity"
 const val MATCHEXTRA = "MATCH_ID"
 
 class MainActivity : ComponentActivity() {
-    private var historyData by mutableStateOf(listOf<Match>())
+
+    // Inizializzo il mio ViewModel utilizzando la factory
+    private val mainViewModel: MainViewModel by viewModels {
+        val dao = AppDatabase.getDatabaseDao(this.applicationContext)
+        MainViewModelFactory(this.application, dao)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,32 +66,23 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
-        // Ottengo direttamente il DAO tramite il Singleton
-        val dao = AppDatabase.getDatabaseDao(this)
-        Log.d(tagMainActivity, "Database DAO obtained")
-
-        // Uso lifecycleScope (coroutine) per il reperimento in modo asincrono della lista delle partite dal database
-        lifecycleScope.launch {
-            // withContext(Dispatchers.IO) sposta l'esecuzione su un thread dedicato all'I/O
-            val data = withContext(Dispatchers.IO) {
-                dao.getAll()
-            }
-
-            // Qui siamo di nuovo sul Main Thread, quindi possiamo aggiornare la UI
-            withContext(Dispatchers.Main) {
-                historyData = data
-                Log.d(tagMainActivity, "Number of items in DB: ${historyData.size}")
-            }
-        }
-
         setContent {
             SimonIntermediateTheme {
+
+                // https://developer.android.com/develop/ui/compose/state?hl=it
+                // https://developer.android.com/reference/kotlin/androidx/compose/runtime/collectAsState.composable#(kotlinx.coroutines.flow.StateFlow).collectAsState(kotlin.coroutines.CoroutineContext)˙
+
+                // Osservo il dato esposto dal ViewModel sotto forma di State
+                // Quando la mia lista nel DB cambia, historyList si aggiornerà
+                // in automatico scatenando una ricomposizione della HomeScreen
+                val historyList by mainViewModel.historyData.collectAsState()
+
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     HomeScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding),
-                        historyList = historyData, // Qui passo lo storico delle partite al composable della Home Screen
+                        historyList = historyList,
                         goToGameScreen = {
                             val myIntent = Intent(this, GameActivity::class.java)
                             Log.d(tagMainActivity, "startActivity of GameActivity")
@@ -104,52 +102,11 @@ class MainActivity : ComponentActivity() {
 
                         // DA RIMUOVERE ALLA FINE DEL PROGETTO (SOLO DEV)!!!!!!
                         deleteAll = {
-                            lifecycleScope.launch {
-                                withContext(Dispatchers.IO) { dao.deleteAll() }
-                                withContext(Dispatchers.Main) {
-                                    Log.d(
-                                        tagMainActivity,
-                                        "Deleted all records from database"
-                                    )
-                                }
-
-                                // ri-getto i dati nel db
-                                val data = withContext(Dispatchers.IO) { dao.getAll() }
-                                withContext(Dispatchers.Main) {
-                                    historyData = data
-                                    Log.d(
-                                        tagMainActivity,
-                                        "Number of items in DB: ${historyData.size}"
-                                    )
-                                }
-                            }
+                            // Chiamo la funzione del mio ViewModel per pulire il database
+                            mainViewModel.deleteAllMatches()
                         }
-                        // ----------------------------------------------------------------------
                     )
                 }
-            }
-        }
-    }
-
-    // Per recuperare correttamente i dati del database quando l'activity si riprende dallo stack
-    override fun onResume() {
-        super.onResume()
-
-        // Ottengo direttamente il DAO tramite il Singleton
-        val dao = AppDatabase.getDatabaseDao(this)
-        Log.d(tagMainActivity, "Database DAO obtained")
-
-        // Uso lifecycleScope (coroutine) per il reperimento in modo asincrono della lista delle partite dal database
-        lifecycleScope.launch {
-            // withContext(Dispatchers.IO) sposta l'esecuzione su un thread dedicato all'I/O
-            val data = withContext(Dispatchers.IO) {
-                dao.getAll()
-            }
-
-            // Qui siamo di nuovo sul Main Thread, quindi possiamo aggiornare la UI
-            withContext(Dispatchers.Main) {
-                historyData = data
-                Log.d(tagMainActivity, "Number of items in DB: ${historyData.size}")
             }
         }
     }

@@ -3,24 +3,25 @@ package com.example.simon_intermediate.data
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 
-// Mettendo "suspend" alle funzioni, permette a Room di gestire le operazioni in modo non bloccante
+// Mettendo "suspend" alle funzioni, permetto a Room di gestire le operazioni in modo non bloccante
 @Dao
 interface MatchDao {
-    // Inserisce una nuova riga nel database
+    // Inserisco una nuova riga nel database
     @Insert
     suspend fun insert(currentMatch: Match)
 
-    // Recupera tutte le righe dalla tabella, ho messo ordine DECRESCENTE
-    // così mostra la partita più recente in cima alla lista
+    // Recupero tutte le righe dalla tabella; ho messo l'ordine DECRESCENTE
+    // così mostro la partita più recente in cima alla lista
     @Query("SELECT * FROM gameHistory ORDER BY id DESC")
-    suspend fun getAll(): List<Match>
+    fun getAll(): Flow<List<Match>>
 
-    // Inserisce una nuova riga nel database
+    // Recupero le informazioni di una singola riga tramite il suo ID
     @Query("SELECT * FROM gameHistory WHERE id = :matchID")
     suspend fun getMatchInfo(matchID: Int): Match
 
-    // Rimuove tutte le righe dalla tabella (DEV)
+    // Rimuovo tutte le righe dalla tabella (DEV)
     @Query("DELETE FROM gameHistory WHERE 1=1")
     suspend fun deleteAll()
 }
