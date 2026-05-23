@@ -48,6 +48,7 @@ import com.example.simon_intermediate.data.AppDatabase
 import kotlinx.coroutines.delay
 import kotlin.random.Random
 import kotlin.text.split
+import androidx.activity.viewModels
 
 // Tag per il logger di debug di GameActivity
 const val tagGameActivity = "GameActivity"
@@ -62,6 +63,11 @@ data class SimonButton(
 class GameActivity : ComponentActivity() {
     private lateinit var simonButtons: List<SimonButton>
 
+    private val gameViewModel: GameViewModel by viewModels {
+        val dao = AppDatabase.getDatabaseDao(this.applicationContext)
+        GameViewModelFactory(this.application, dao)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -69,7 +75,6 @@ class GameActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
-        val dao = AppDatabase.getDatabaseDao(this)
         simonButtons = listOf(
             SimonButton("R", Color.Red, Color(0xFFAA3333), SimonSound(261.63)), // Do
             SimonButton("G", Color.Green, Color(0xFF338833), SimonSound(293.66)), // Re
@@ -90,24 +95,17 @@ class GameActivity : ComponentActivity() {
                             .padding(innerPadding),
                         simonButtons,
                         insertMatch = { matchToInsert: Match ->
-                            //  esegue l'inserimento nel database e, solo al termine del salvataggio,
-                            //  torna sul thread principale (Dispatchers.Main) per chiudere l'activity con finish().
                             if (matchToInsert.maxLengthCompleted > 0) {
-                                lifecycleScope.launch(Dispatchers.IO) {
-                                    dao.insert(matchToInsert)
-                                    Log.d(
-                                        tagGameActivity,
-                                        "Inserted the following match: $matchToInsert"
-                                    )
-
-                                    withContext(Dispatchers.Main) {
-                                        Log.d(tagGameActivity, "going back to MainActivity")
-                                        finish() // ritorna all'activity precedente
-                                    }
+                                gameViewModel.saveMatch(matchToInsert) {
+                                    Log.d(tagGameActivity, "Match saved, closing activity")
+                                    finish() // ritorno all'activity precedente solo dopo il salvataggio
                                 }
                             } else {
-                                // torno al MainActivity senza salvare alcun dato
-                                Log.d(tagGameActivity, "going back to MainActivity")
+                                // torno al MainActivity senza salvare alcun dato se la partita non è valida
+                                Log.d(
+                                    tagGameActivity,
+                                    "Match not valid for saving, going back to MainActivity"
+                                )
                                 finish()
                             }
                         },
