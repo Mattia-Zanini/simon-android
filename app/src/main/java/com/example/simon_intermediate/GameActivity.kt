@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -27,28 +28,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import com.example.simon_intermediate.ui.theme.SimonIntermediateTheme
-import com.example.simon_intermediate.data.Match
 import com.example.simon_intermediate.data.AppDatabase
-import kotlinx.coroutines.delay
-import kotlin.random.Random
-import kotlin.text.split
-import androidx.activity.viewModels
 
 // Tag per il logger di debug di GameActivity
 const val tagGameActivity = "GameActivity"
@@ -94,21 +80,7 @@ class GameActivity : ComponentActivity() {
                             .fillMaxSize()
                             .padding(innerPadding),
                         simonButtons,
-                        insertMatch = { matchToInsert: Match ->
-                            if (matchToInsert.maxLengthCompleted > 0) {
-                                gameViewModel.saveMatch(matchToInsert) {
-                                    Log.d(tagGameActivity, "Match saved, closing activity")
-                                    finish() // ritorno all'activity precedente solo dopo il salvataggio
-                                }
-                            } else {
-                                // torno al MainActivity senza salvare alcun dato se la partita non è valida
-                                Log.d(
-                                    tagGameActivity,
-                                    "Match not valid for saving, going back to MainActivity"
-                                )
-                                finish()
-                            }
-                        },
+                        gameViewModel,
                         systemFinish = { finish() }
                     )
                 }
@@ -121,10 +93,10 @@ class GameActivity : ComponentActivity() {
 
         Log.d(tagGameActivity, "onResume called")
 
-        // serve a verificare se una variabile dichiarata come lateinit è già stata inizializzata oppure no
-        if (this::simonButtons.isInitialized) {
-            simonButtons.forEach { it.sound.prepare() }
-        }
+        simonButtons.forEach { it.sound.prepare() }
+
+        gameViewModel.setAppVisibility(true)
+        gameViewModel.playComputerSequence(simonButtons)
     }
 
     override fun onPause() {
@@ -132,9 +104,8 @@ class GameActivity : ComponentActivity() {
 
         Log.d(tagGameActivity, "onPause called")
 
-        if (::simonButtons.isInitialized) {
-            simonButtons.forEach { it.sound.release() }
-        }
+        gameViewModel.setAppVisibility(false)
+        simonButtons.forEach { it.sound.release() }
     }
 }
 
@@ -142,104 +113,31 @@ class GameActivity : ComponentActivity() {
 fun GameScreen(
     modifier: Modifier = Modifier,
     simonBtns: List<SimonButton>,
-    insertMatch: (Match) -> Unit,
+    viewModel: GameViewModel,
     systemFinish: () -> Unit
 ) {
     // Recupero l'orientamento attuale del dispositivo
     val orientation = LocalConfiguration.current.orientation
     val isPortrait: Boolean = orientation == Configuration.ORIENTATION_PORTRAIT
 
-    // contiene la sequenza che il computer genera e mostra all'utente
-    var gameSequence by rememberSaveable { mutableStateOf("") }
-
-    // contiene la sequenza che l'utente ha cliccato
-    var userSequence by rememberSaveable { mutableStateOf("") }
-
-    // false se il computer sta riproducendo la sequenza, true se tocca all'utente
-    var isPlayerTurn by rememberSaveable { mutableStateOf(false) }
-
-    // Contiene la label del colore che il computer sta mostrando (es. "R")
-    var activeColorLabel by rememberSaveable { mutableStateOf<String?>(null) }
-
-    // Rappresenta l'index della sequenza che il computer ha appena mostrato
-    var computerIndex by rememberSaveable { mutableIntStateOf(0) }
-
-    // indica dove è arrivato l'utente nel riprodurre la sequenza
-    var playerIndex by rememberSaveable { mutableIntStateOf(0) }
-
-    // mantiene lo stato in cui si trova il gioco, se in pausa oppure no
-    var isGamePaused by rememberSaveable { mutableStateOf(false) }
-
-    // tiene lo stato di gioco di fine partita o partita in corso
-    var isGameOver by rememberSaveable { mutableStateOf(false) }
-
-    // solo il giocare può decidere quando iniziare la partita
-    var isGameStarted by rememberSaveable { mutableStateOf(false) }
-
-
-    // ----- LOGICA DEL COMPUTER ------
-    LaunchedEffect(isGameStarted, isPlayerTurn, isGamePaused, isGameOver) {
-        // turno del computer, il gioco NON è in pausa E non è finito
-        if (isGameStarted && !isPlayerTurn && !isGamePaused && !isGameOver) {
-            if (gameSequence.isEmpty()) {
-                // inizializzo la sequenza di gioco se è vuota (inizio partita)
-                gameSequence = simonBtns.random().label
-                Log.d(tagGameActivity, "Initial sequence set")
-            }
-
-            Log.d(tagGameActivity, "Current sequence: $gameSequence")
-
-            delay(800) // delay iniziale, giusto per non avere il bottone subito accesso all'inizio
-            while (computerIndex < gameSequence.length) {
-                val currentLabel = gameSequence[computerIndex].toString()
-                simonBtns.find { it.label == currentLabel }?.sound?.play()
-                activeColorLabel = currentLabel
-                delay(1000) // acceso
-                activeColorLabel = null
-                delay(500) // pausa tra i colori
-
-                if (isGamePaused) break // se l'utente preme pausa, esce dal loop
-
-                Log.d(tagGameActivity, "Computer sequence index: [$computerIndex]")
-                computerIndex++
-            }
-
-            if (computerIndex >= gameSequence.length) {
-                isPlayerTurn = true // ora tocca all'utente
-                computerIndex = 0  // reset per la prossima sequenza
-                Log.d(tagGameActivity, "Computer finished sequence and reset variables")
-            }
-        }
-
-        // gestisce la fine del gioco
-        if (isGameOver) {
-            // il gioco è fermo e i tasti diventano rossi
-            delay(1000)
-
-            // prepara i dati per il salvataggio
-            val seqNum = gameSequence.length
-            var gameSequenceToSave = ""
-
-            // nel caso in cui la stringa non sia vuota allora la salvo nel modo standard
-            if (seqNum > 0) {
-                gameSequenceToSave = gameSequence[0].toString()
-                repeat(seqNum - 1) { i ->
-                    gameSequenceToSave += ", ${gameSequence[i + 1]}"
-                }
-            }
-
-            // Creazione dell'oggetto Match con la sequenza attuale
-            val currentMatch = Match(
-                finalSequence = gameSequenceToSave,
-                errorIndex = userSequence.length,
-                maxLengthCompleted = seqNum - 1
-            )
-
-            // Chiamo la lambda insertMatch che si occupa del salvataggio asincrono e della chiusura dell'Activity
-            insertMatch(currentMatch)
+    // Riproduce il suono quando il computer attiva un colore
+    LaunchedEffect(viewModel.activeColorLabel) {
+        viewModel.activeColorLabel?.let { label ->
+            simonBtns.find { it.label == label }?.sound?.play()
         }
     }
 
+    // sostituzione del tasto "Back" del sistema
+    BackHandler(enabled = true) {
+        // Se la partita è in corso, clicco virtualmente Fine Partita
+        if (viewModel.isGameStarted && !viewModel.isGameOver) {
+            Log.d(tagGameActivity, "Back pressed: triggering end game")
+            viewModel.onEndClick(systemFinish)
+        } else {
+            // se non è iniziata la partita allora chiudo l'activity
+            systemFinish()
+        }
+    }
 
     // Assegno il numero di colonne e di righe
     val cols = 3
@@ -247,78 +145,6 @@ fun GameScreen(
 
     // Altezza variabile per la TextBox a seconda dell'orientamento
     val textBoxHeight = if (isPortrait) 180.dp else 200.dp
-
-    val onStartClick: () -> Unit = {
-        Log.d(tagGameActivity, "BTN 'Start' clicked")
-
-        isPlayerTurn = false
-        isGameStarted = true
-    }
-
-    val onPauseClick: () -> Unit = {
-        Log.d(tagGameActivity, "BTN 'Pause' clicked")
-
-        isGamePaused = true
-    }
-
-    val onContinueClick: () -> Unit = {
-        Log.d(tagGameActivity, "BTN 'Continue' clicked")
-
-        isGamePaused = false
-    }
-
-    val onEndClick: () -> Unit = {
-        Log.d(tagGameActivity, "BTN 'End Game' clicked")
-
-        isGameOver = true
-        isPlayerTurn = false
-    }
-
-    // Logica di controllo di vittoria, colore corretto e sconfitta dell'utente
-    val onColorClick: (String) -> Unit = { color ->
-        Log.d(tagGameActivity, "BTN '$color' clicked")
-        simonBtns.find { it.label == color }?.sound?.play()
-
-        if (color == gameSequence[playerIndex].toString()) {
-            Log.d(tagGameActivity, "User clicked the correct color")
-
-            playerIndex++
-            userSequence += if (userSequence.isEmpty()) color else ", $color"
-        } else {
-            Log.d(tagGameActivity, "User clicked the wrong color")
-
-            onEndClick()
-        }
-
-        if (playerIndex == gameSequence.length) {
-            Log.d(
-                tagGameActivity,
-                "User completed sequence correctly: $gameSequence"
-            )
-            isPlayerTurn = false
-            gameSequence += simonBtns.random().label // aggiungo un colore addizionale random
-            playerIndex = 0
-            userSequence = "" // ripulisco la sequenza dell'utente
-        }
-    }
-
-
-    // sostituzione del tasto "Back" del sistema
-    BackHandler(enabled = true) {
-        // Se la partita è in corso, clicco virtualmente Fine Partita
-        if (isGameStarted) {
-            Log.d(tagGameActivity, "Back pressed: triggering end game")
-
-            onEndClick()
-        }
-
-        // se non è iniziata la partita allora chiudo l'activity
-        if (!isGameStarted) {
-            systemFinish()
-        }
-    }
-
-
 
     if (isPortrait) {
         // ----- LAYOUT PORTRAIT -----
@@ -333,11 +159,14 @@ fun GameScreen(
                 rows,
                 cols,
                 simonBtns,
-                isPlayerTurn,
-                isGamePaused,
-                isGameOver,
-                activeColorLabel,
-                onColorClick
+                viewModel.isPlayerTurn,
+                viewModel.isGamePaused,
+                viewModel.isGameOver,
+                viewModel.activeColorLabel,
+                onButtonClick = { color ->
+                    simonBtns.find { it.label == color }?.sound?.play()
+                    viewModel.onColorClick(color, simonBtns, systemFinish)
+                }
             )
 
             // Text per contenere la sequenza
@@ -346,18 +175,18 @@ fun GameScreen(
                     .fillMaxWidth()
                     .height(textBoxHeight)
                     .padding(vertical = 16.dp),
-                userSequence
+                viewModel.userSequence
             )
 
             // Zona pulsanti di controllo
             ActionButtons(
-                isComputerTurn = (!isPlayerTurn && isGameStarted && !isGameOver),
-                isStarted = isGameStarted,
-                isPaused = isGamePaused,
-                onStart = onStartClick,
-                onPause = onPauseClick,
-                onContinue = onContinueClick,
-                onEnd = onEndClick
+                isComputerTurn = (!viewModel.isPlayerTurn && viewModel.isGameStarted && !viewModel.isGameOver),
+                isStarted = viewModel.isGameStarted,
+                isPaused = viewModel.isGamePaused,
+                onStart = { viewModel.onStartClick(simonBtns) },
+                onPause = { viewModel.onPauseClick() },
+                onContinue = { viewModel.onContinueClick(simonBtns) },
+                onEnd = { viewModel.onEndClick(onSaved = systemFinish) }
             )
         }
     } else {
@@ -374,11 +203,14 @@ fun GameScreen(
                 rows,
                 cols,
                 simonBtns,
-                isPlayerTurn,
-                isGamePaused,
-                isGameOver,
-                activeColorLabel,
-                onColorClick
+                viewModel.isPlayerTurn,
+                viewModel.isGamePaused,
+                viewModel.isGameOver,
+                viewModel.activeColorLabel,
+                onButtonClick = { color ->
+                    simonBtns.find { it.label == color }?.sound?.play()
+                    viewModel.onColorClick(color, simonBtns, systemFinish)
+                }
             )
 
             // Destra: TextBox + Pulsanti (45% dello spazio)
@@ -391,20 +223,20 @@ fun GameScreen(
                     Modifier
                         .fillMaxWidth()
                         .height(textBoxHeight),
-                    userSequence
+                    viewModel.userSequence
                 )
 
                 // Lo Spacer "mangia" tutto lo spazio che avanza tra la TextBox e l'ActionButtons
                 Spacer(modifier = Modifier.weight(1f))
 
                 ActionButtons(
-                    isComputerTurn = (!isPlayerTurn && isGameStarted && !isGameOver),
-                    isStarted = isGameStarted,
-                    isPaused = isGamePaused,
-                    onStart = onStartClick,
-                    onPause = onPauseClick,
-                    onContinue = onContinueClick,
-                    onEnd = onEndClick
+                    isComputerTurn = (!viewModel.isPlayerTurn && viewModel.isGameStarted && !viewModel.isGameOver),
+                    isStarted = viewModel.isGameStarted,
+                    isPaused = viewModel.isGamePaused,
+                    onStart = { viewModel.onStartClick(simonBtns) },
+                    onPause = { viewModel.onPauseClick() },
+                    onContinue = { viewModel.onContinueClick(simonBtns) },
+                    onEnd = { viewModel.onEndClick(onSaved = systemFinish) }
                 )
             }
         }
@@ -467,7 +299,7 @@ fun ColorGrid(
                             disabledContainerColor = if (isThisButtonActive) activeColor else disabledColor
                         ),
                         onClick = { onButtonClick(btnLabel) },
-                        enabled = isPlayerTurn
+                        enabled = isPlayerTurn && !isPaused && !isOver
                     ) { }
 
                     // Incremento l'indice per scorrere le liste dei colori e delle stringhe
@@ -551,19 +383,4 @@ fun ActionButtons(
             )
         }
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun MainScreenPreview() {
-    val demoButtons = listOf(
-        SimonButton("R", Color.Red, Color(0xFFAA3333), SimonSound(261.63)),
-        SimonButton("G", Color.Green, Color(0xFF338833), SimonSound(293.66)),
-        SimonButton("B", Color.Blue, Color(0xFF3333AA), SimonSound(329.63)),
-        SimonButton("M", Color.Magenta, Color(0xF9AA33AA), SimonSound(349.23)),
-        SimonButton("Y", Color.Yellow, Color(0xFFAAAA33), SimonSound(392.00)),
-        SimonButton("C", Color.Cyan, Color(0xFF33AAAA), SimonSound(440.00))
-    )
-
-    GameScreen(simonBtns = demoButtons, insertMatch = {}, systemFinish = {})
 }

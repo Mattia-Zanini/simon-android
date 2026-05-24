@@ -42,9 +42,11 @@ class SimonSound(private val frequenza: Double, private val durataMs: Int = 500)
 
     // Libera le risorse hardware associate all'AudioTrack
     fun release() {
-        audioTrack?.release()
+        audioTrack?.let {
+            it.release()
+            Log.d(tagSimonSound, "Sound released for frequency $frequenza")
+        }
         audioTrack = null
-        Log.d(tagSimonSound, "Sound released for frequency $frequenza")
     }
 
     private fun generatePCMSineWave(frequenza: Double, durataMs: Int): ShortArray {
