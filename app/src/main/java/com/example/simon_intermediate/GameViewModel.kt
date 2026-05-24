@@ -13,6 +13,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.simon_intermediate.data.Match
 import com.example.simon_intermediate.data.MatchDao
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -62,9 +63,17 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
     var isAppPaused by mutableStateOf(false)
         private set
 
+    // traccio la Coroutine in esecuzione che riproduce la sequenza
+    private var playSequenceJob: Job? = null
+
     // Eseguo la riproduzione della sequenza da parte del sistema
     fun playComputerSequence(simonBtns: List<SimonButton>) {
-        viewModelScope.launch {
+        if (playSequenceJob?.isActive == true) {
+            Log.d(tagGameActivity, "Sequence already playing, skipping new launch")
+            return
+        }
+
+        playSequenceJob = viewModelScope.launch {
             // turno del computer, il gioco NON è in pausa E non è finito E se l'app non è in background
             if (isGameStarted && !isPlayerTurn && !isGamePaused && !isGameOver && !isAppPaused) {
                 if (gameSequence.isEmpty()) {
@@ -77,20 +86,23 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
 
                 delay(800) // delay iniziale, giusto per non avere il bottone subito accesso
                 while (computerIndex < gameSequence.length) {
-                    val currentLabel = gameSequence[computerIndex].toString()
-                    activeColorLabel = currentLabel
-                    delay(1000) // acceso
-                    activeColorLabel = null
-                    delay(500) // pausa tra i colori
+                    if (isGamePaused || isAppPaused || isGameOver) break // esco dal loop
 
-                    if (isGamePaused) break // se l'utente preme pausa, esce dal loop
-                    if (isAppPaused) break // se l'activity è in background allora blocco la riproduzione
+                    activeColorLabel = gameSequence[computerIndex].toString()
+                    simonBtns.find { it.label == activeColorLabel }?.sound?.play() // Riproduce il suono quando il computer attiva un colore
+
+                    delay(1000) // acceso
+                    activeColorLabel = null // spengo il pulsante
+                    if (isGamePaused || isAppPaused || isGameOver) break
+
+                    delay(500) // pausa tra i colori
 
                     Log.d(tagGameActivity, "Computer sequence index: [$computerIndex]")
                     computerIndex++
                 }
 
-                if (computerIndex >= gameSequence.length) {
+                // non passo il turno se il gioco è in pausa
+                if (computerIndex >= gameSequence.length && !isGamePaused) {
                     isPlayerTurn = true // ora tocca all'utente
                     computerIndex = 0  // reset per la prossima sequenza
                     Log.d(tagGameActivity, "Computer finished sequence and reset variables")
@@ -183,7 +195,8 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
     }
 
     // Logica di controllo di vittoria, colore corretto e sconfitta dell'utente
-    val onColorClick: (String, List<SimonButton>, () -> Unit) -> Unit = { color, simonBtns, onSaved ->
+    val onColorClick: (String, List<SimonButton>, () -> Unit) -> Unit =
+        { color, simonBtns, onSaved ->
             Log.d(tagGameActivity, "BTN '$color' clicked")
 
             if (color == gameSequence[playerIndex].toString()) {

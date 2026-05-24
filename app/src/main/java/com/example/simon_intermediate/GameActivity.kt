@@ -120,13 +120,6 @@ fun GameScreen(
     val orientation = LocalConfiguration.current.orientation
     val isPortrait: Boolean = orientation == Configuration.ORIENTATION_PORTRAIT
 
-    // Riproduce il suono quando il computer attiva un colore
-    LaunchedEffect(viewModel.activeColorLabel) {
-        viewModel.activeColorLabel?.let { label ->
-            simonBtns.find { it.label == label }?.sound?.play()
-        }
-    }
-
     // sostituzione del tasto "Back" del sistema
     BackHandler(enabled = true) {
         // Se la partita è in corso, clicco virtualmente Fine Partita
