@@ -23,6 +23,8 @@ import kotlinx.coroutines.launch
 class GameViewModel(application: Application, private val matchDao: MatchDao) :
     AndroidViewModel(application) {
 
+    private val tagGameViewModel = this::class.simpleName
+
     // contiene la sequenza che il computer genera e mostra all'utente
     var gameSequence by mutableStateOf("")
         private set // incapsulamento: in questo modo la variabile è SOLO visibile all'esterno, ma non modificabile
@@ -66,10 +68,16 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
     // traccio la Coroutine in esecuzione che riproduce la sequenza
     private var playSequenceJob: Job? = null
 
+    // traccio la Coroutine in esecuzione che salva i dati nel database
+    private var saveMatchJob: Job? = null
+
+    // traccio la Coroutine in esecuzione che gestisce il game over
+    private var gameOverJob: Job? = null
+
     // Eseguo la riproduzione della sequenza da parte del sistema
     fun playComputerSequence(simonBtns: List<SimonButton>) {
         if (playSequenceJob?.isActive == true) {
-            Log.d(tagGameActivity, "Sequence already playing, skipping new launch")
+            Log.d(tagGameViewModel, "Sequence already playing, skipping new launch")
             return
         }
 
@@ -79,10 +87,10 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
                 if (gameSequence.isEmpty()) {
                     // inizializzo la sequenza di gioco se è vuota (inizio partita)
                     gameSequence = simonBtns.random().label
-                    Log.d(tagGameActivity, "Initial sequence set")
+                    Log.d(tagGameViewModel, "Initial sequence set")
                 }
 
-                Log.d(tagGameActivity, "Current sequence: $gameSequence")
+                Log.d(tagGameViewModel, "Current sequence: $gameSequence")
 
                 delay(800) // delay iniziale, giusto per non avere il bottone subito accesso
                 while (computerIndex < gameSequence.length) {
@@ -97,7 +105,7 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
 
                     delay(500) // pausa tra i colori
 
-                    Log.d(tagGameActivity, "Computer sequence index: [$computerIndex]")
+                    Log.d(tagGameViewModel, "Computer sequence index: [$computerIndex]")
                     computerIndex++
                 }
 
@@ -105,7 +113,7 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
                 if (computerIndex >= gameSequence.length && !isGamePaused) {
                     isPlayerTurn = true // ora tocca all'utente
                     computerIndex = 0  // reset per la prossima sequenza
-                    Log.d(tagGameActivity, "Computer finished sequence and reset variables")
+                    Log.d(tagGameViewModel, "Computer finished sequence and reset variables")
                 }
             }
         }
@@ -113,50 +121,55 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
 
     // gestisce la fine del gioco
     private fun handleGameOver(onSaved: () -> Unit) {
-        viewModelScope.launch {
-            if (isGameOver) {
-                // il gioco è fermo e i tasti diventano rossi
-                delay(1000)
+        if (gameOverJob?.isActive == true) {
+            Log.d(tagGameViewModel, "Already handling current match game over")
+            return
+        }
 
-                val seqNum = gameSequence.length
+        gameOverJob = viewModelScope.launch {
+            Log.d(tagGameViewModel, "Handling current match game over")
+            
+            // il gioco è fermo e i tasti diventano rossi
+            delay(1000)
 
-                // non registro la partita se interrotta durante la presentazione della prima sequenza
-                if (seqNum == 1 && !isPlayerTurn) {
-                    Log.d(
-                        tagGameActivity,
-                        "Match not saved: ended during first sequence presentation"
-                    )
-                    onSaved()
+            val seqNum = gameSequence.length
 
-                    // serve per uscire in modo anticipato da una specifica espressione
-                    // lambda, in questo caso, dal blocco della Coroutine avviata con launch
-                    return@launch
-                }
-
-                // nel caso in cui la stringa non sia vuota allora la salvo nel modo standard
-                var gameSequenceToSave = ""
-                if (seqNum > 0) {
-                    gameSequenceToSave = gameSequence[0].toString()
-                    repeat(seqNum - 1) { i ->
-                        gameSequenceToSave += ", ${gameSequence[i + 1]}"
-                    }
-                }
-
-                // Creazione dell'oggetto Match con la sequenza attuale
-                val currentMatch = Match(
-                    finalSequence = gameSequenceToSave,
-                    errorIndex = playerIndex,
-                    maxLengthCompleted = seqNum - 1
+            // non registro la partita se interrotta durante la presentazione della prima sequenza
+            if (seqNum == 1 && !isPlayerTurn) {
+                Log.d(
+                    tagGameViewModel,
+                    "Match not saved: ended during first sequence presentation"
                 )
+                onSaved()
 
-                // effettuo il salvataggio della partita nel database
-                saveMatch(currentMatch, onSaved)
+                // serve per uscire in modo anticipato da una specifica espressione
+                // lambda, in questo caso, dal blocco della Coroutine avviata con launch
+                return@launch
             }
+
+            // nel caso in cui la stringa non sia vuota allora la salvo nel modo standard
+            var gameSequenceToSave = ""
+            if (seqNum > 0) {
+                gameSequenceToSave = gameSequence[0].toString()
+                repeat(seqNum - 1) { i ->
+                    gameSequenceToSave += ", ${gameSequence[i + 1]}"
+                }
+            }
+
+            // Creazione dell'oggetto Match con la sequenza attuale
+            val currentMatch = Match(
+                finalSequence = gameSequenceToSave,
+                errorIndex = playerIndex,
+                maxLengthCompleted = seqNum - 1
+            )
+
+            // effettuo il salvataggio della partita nel database
+            saveMatch(currentMatch, onSaved)
         }
     }
 
     val onStartClick: (List<SimonButton>) -> Unit = { simonBtns ->
-        Log.d(tagGameActivity, "BTN 'Start' clicked")
+        Log.d(tagGameViewModel, "BTN 'Start' clicked")
 
         isPlayerTurn = false
         isGameStarted = true
@@ -164,30 +177,27 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
     }
 
     val onPauseClick: () -> Unit = {
-        Log.d(tagGameActivity, "BTN 'Pause' clicked")
+        Log.d(tagGameViewModel, "BTN 'Pause' clicked")
 
         isGamePaused = true
     }
 
     // riprendo la partita dopo la pausa
     val onContinueClick: (List<SimonButton>) -> Unit = { simonBtns ->
-        Log.d(tagGameActivity, "BTN 'Continue' clicked")
+        Log.d(tagGameViewModel, "BTN 'Continue' clicked")
 
         isGamePaused = false
         playComputerSequence(simonBtns)
     }
 
     fun onEndClick(onSaved: () -> Unit) {
-        // evito chiamate multiple se la partita è già conclusa
-        if (isGameOver) return
-
         // Se la partita non è iniziata, chiudo semplicemente l'Activity
         if (!isGameStarted) {
             onSaved()
             return
         }
 
-        Log.d(tagGameActivity, "BTN 'End Game' clicked")
+        Log.d(tagGameViewModel, "BTN 'End Game' clicked")
 
         isGameOver = true
         isPlayerTurn = false
@@ -197,17 +207,17 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
     // Logica di controllo di vittoria, colore corretto e sconfitta dell'utente
     val onColorClick: (String, List<SimonButton>, () -> Unit) -> Unit =
         { color, simonBtns, onSaved ->
-            Log.d(tagGameActivity, "BTN '$color' clicked")
+            Log.d(tagGameViewModel, "BTN '$color' clicked")
 
             if (color == gameSequence[playerIndex].toString()) {
-                Log.d(tagGameActivity, "User clicked the correct color")
+                Log.d(tagGameViewModel, "User clicked the correct color")
 
                 playerIndex++
                 userSequence += if (userSequence.isEmpty()) color else ", $color"
 
                 if (playerIndex == gameSequence.length) {
                     Log.d(
-                        tagGameActivity,
+                        tagGameViewModel,
                         "User completed sequence correctly: $gameSequence"
                     )
                     isPlayerTurn = false
@@ -217,7 +227,7 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
                     playComputerSequence(simonBtns)
                 }
             } else {
-                Log.d(tagGameActivity, "User clicked the wrong color")
+                Log.d(tagGameViewModel, "User clicked the wrong color")
 
                 onEndClick(onSaved)
             }
@@ -225,8 +235,14 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
 
     // salvo la partita nel DB
     private fun saveMatch(match: Match, onSaved: () -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
+        if (saveMatchJob?.isActive == true) {
+            Log.d(tagGameViewModel, "Already saving current match")
+            return
+        }
+
+        saveMatchJob = viewModelScope.launch(Dispatchers.IO) {
             matchDao.insert(match)
+            Log.d(tagGameViewModel, "Current match saved")
 
             // Una volta salvato, invoco la callback sul thread principale
             launch(Dispatchers.Main) {

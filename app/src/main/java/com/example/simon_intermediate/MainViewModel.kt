@@ -5,7 +5,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.simon_intermediate.data.AppDatabase
 import com.example.simon_intermediate.data.Match
 import com.example.simon_intermediate.data.MatchDao
 import kotlinx.coroutines.Dispatchers
@@ -26,13 +25,6 @@ class MainViewModel(application: Application, private val matchDao: MatchDao) :
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
-
-    // Esegue l'inserimento di una partita
-    fun insertMatch(match: Match) {
-        viewModelScope.launch(Dispatchers.IO) {
-            matchDao.insert(match)
-        }
-    }
 
     // Esegue la cancellazione totale delle partite
     fun deleteAllMatches() {

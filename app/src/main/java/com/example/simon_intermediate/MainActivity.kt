@@ -1,6 +1,5 @@
 package com.example.simon_intermediate
 
-import android.app.ComponentCaller
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -27,25 +26,21 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
-import com.example.simon_intermediate.data.Match
 import com.example.simon_intermediate.data.AppDatabase
+import com.example.simon_intermediate.data.Match
 import com.example.simon_intermediate.ui.theme.SimonIntermediateTheme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlin.collections.arrayListOf
-
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import com.example.simon_intermediate.data.MatchDao
 
 // Tag per il logger di debug di MainActivity
 const val tagMainActivity = "MainActivity"
@@ -53,7 +48,7 @@ const val MATCHEXTRA = "MATCH_ID"
 
 class MainActivity : ComponentActivity() {
 
-    // Inizializzo il mio ViewModel utilizzando la factory
+    // Inizializzo il ViewModel utilizzando la factory
     private val mainViewModel: MainViewModel by viewModels {
         val dao = AppDatabase.getDatabaseDao(this.applicationContext)
         MainViewModelFactory(this.application, dao)
@@ -102,7 +97,7 @@ class MainActivity : ComponentActivity() {
 
                         // DA RIMUOVERE ALLA FINE DEL PROGETTO (SOLO DEV)!!!!!!
                         deleteAll = {
-                            // Chiamo la funzione del mio ViewModel per pulire il database
+                            // Chiamo la funzione del ViewModel per pulire il database
                             mainViewModel.deleteAllMatches()
                         }
                     )
@@ -189,16 +184,9 @@ fun GameCard(gameInfo: Match, detailFun: (Int) -> Unit) {
             },
         horizontalArrangement = Arrangement.Start
     ) {
-        val colorsSequence = gameInfo.finalSequence.split(", ")
-        var numSequence = colorsSequence.count()
-
-        // Controllo che la stringa sia vuota e correggo il valore di numSequence
-        if (numSequence == 1 && colorsSequence[0].isEmpty())
-            numSequence = 0
-
-        // Conteggio dei pulsanti cliccati
+        // Conteggio del punteggio (lunghezza massima completata correttamente)
         Text(
-            text = numSequence.toString(),
+            text = gameInfo.maxLengthCompleted.toString(),
             color = MaterialTheme.colorScheme.onSecondaryContainer
         )
 
@@ -207,12 +195,45 @@ fun GameCard(gameInfo: Match, detailFun: (Int) -> Unit) {
         // Sequenza dei pulsanti cliccati
         Text(
             modifier = Modifier.weight(1f),
-            text = gameInfo.finalSequence,
+            text = formatStringColored(gameInfo.finalSequence, gameInfo.errorIndex),
             color = MaterialTheme.colorScheme.onSecondaryContainer,
             maxLines = 1, // Forza il testo su una sola riga
             overflow = TextOverflow.Ellipsis, // Aggiunge i "..." se il testo non ci sta
         )
     }
+}
+
+@Composable
+fun formatStringColored(sequenceString: String, errIndex: Int): AnnotatedString {
+    val fSequence = sequenceString.split(", ")
+
+    // prendo la parte di sequenza corretta (dall'inizio fino all'indice dell'errore escluso)
+    val parteCorretta = fSequence
+        .subList(0, errIndex)
+        .joinToString(", ")
+
+    // prendo la parte di sequenza sbagliata (dall'indice dell'errore fino alla fine)
+    val parteErrata = fSequence
+        .subList(errIndex, fSequence.size)
+        .joinToString(", ")
+
+    val sequenzeColorata = buildAnnotatedString {
+        // inserisco la parte corretta con il colore di default
+        withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.onSurface)) {
+            append(parteCorretta)
+        }
+
+        // congiungo le due metà solo nel caso in cui nessuna delle due sia vuota
+        if (parteErrata.count() != 0 && parteCorretta.count() != 0)
+            withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.onSurface)) {
+                append(", ")
+            }
+
+        // aggiungo la parte dall'errore in poi con un SpanStyle di colore diverso
+        withStyle(style = SpanStyle(color = Color.Red)) { append(parteErrata) }
+    }
+
+    return sequenzeColorata
 }
 
 @Preview(showBackground = true)

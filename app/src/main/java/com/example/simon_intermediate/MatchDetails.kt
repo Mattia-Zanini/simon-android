@@ -18,8 +18,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,11 +38,6 @@ import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 
 // Tag per il logger di debug di MatchDetail
 const val tagMatchDetail = "MatchDetail"
@@ -109,33 +109,8 @@ fun DetailScreen(
 @Composable
 fun GameInfo(matchInformations: Match) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        val fSequence = matchInformations.finalSequence.split(", ")
-
-        // prendo la parte di sequenza corretta (dall'inizio fino all'indice dell'errore escluso)
-        val parteCorretta = fSequence
-            .subList(0, matchInformations.errorIndex)
-            .joinToString(", ")
-
-        // prendo la parte di sequenza sbagliata (dall'indice dell'errore fino alla fine)
-        val parteErrata = fSequence
-            .subList(matchInformations.errorIndex, fSequence.size)
-            .joinToString(", ")
-
-        val sequenzeColorata = buildAnnotatedString {
-            // inserisco la parte corretta con il colore di default
-            withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.onSurface)) {
-                append(parteCorretta)
-            }
-
-            // congiungo le due metà solo nel caso in cui nessuna delle due sia vuota
-            if (parteErrata.count() != 0 && parteCorretta.count() != 0)
-                withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.onSurface)) {
-                    append(", ")
-                }
-
-            // aggiungo la parte dall'errore in poi con un SpanStyle di colore diverso
-            withStyle(style = SpanStyle(color = Color.Red)) { append(parteErrata) }
-        }
+        // Ottengo la sequenza "formattata", ovvero colorata
+        val sequenzeColorata = formatStringColored(matchInformations.finalSequence, matchInformations.errorIndex)
 
         InfoRow(
             label = stringResource(R.string.final_sequence),
@@ -188,13 +163,14 @@ fun InfoRow(label: String, value: AnnotatedString) {
 @Composable
 fun DetailScreenPreview() {
     SimonIntermediateTheme {
+        val s = "Y, G, B, B, M, M, R"
+        val m = Match(-1, s, 0, s.split(", ").count() - 1)
+
+        val s2 = "not available"
+        val m2 = Match(-1, s2, 0, s2.split(", ").count() - 1)
+
         DetailScreen(
-            matchInformations = Match(
-                -1,
-                "Y, G, B, B, M, M, R, B, G, Y, C, B, M, M, Y, R",
-                0,
-                10
-            )
+            matchInformations = m
         )
     }
 }
