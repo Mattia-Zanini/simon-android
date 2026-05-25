@@ -54,10 +54,38 @@ class SimonSound(private val frequenza: Double, private val durataMs: Int = 500)
         val numeroCampioni = (durataMs * sampleRate) / 1000
         val buffer = ShortArray(numeroCampioni)
 
+        // Durata del fade in/out in millisecondi per rendere il suono più "dolce"
+        val fadeMs = 40
+        val campioniFade = (fadeMs * sampleRate) / 1000
+
+        // Volume al 70% per evitare distorsioni (clipping) su alcuni speaker
+        val volumeMax = 0.7
+
         repeat(numeroCampioni) { i ->
             val tempo = i.toDouble() / sampleRate
             val angolo = 2.0 * PI * frequenza * tempo
-            buffer[i] = (sin(angolo) * Short.MAX_VALUE).toInt().toShort()
+            val sinusoide = sin(angolo)
+
+            // Calcolo l'inviluppo di ampiezza (Gain)
+            val gain = when {
+                i < campioniFade -> {
+                    // Fase di Fade-in (Attacco)
+                    i.toDouble() / campioniFade
+                }
+
+                i >= numeroCampioni - campioniFade -> {
+                    // Fase di Fade-out (Rilascio) - assicuro che l'ultimo campione sia 0
+                    val campioniMancanti = (numeroCampioni - 1) - i
+                    campioniMancanti.toDouble() / campioniFade
+                }
+
+                else -> {
+                    // Sustain (Volume massimo)
+                    1.0
+                }
+            }
+
+            buffer[i] = (sinusoide * Short.MAX_VALUE * volumeMax * gain).toInt().toShort()
         }
         return buffer
     }

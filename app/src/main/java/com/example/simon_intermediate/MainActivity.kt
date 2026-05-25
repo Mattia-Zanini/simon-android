@@ -96,10 +96,10 @@ class MainActivity : ComponentActivity() {
 
 
                         // DA RIMUOVERE ALLA FINE DEL PROGETTO (SOLO DEV)!!!!!!
-                        deleteAll = {
+                        /*deleteAll = {
                             // Chiamo la funzione del ViewModel per pulire il database
                             mainViewModel.deleteAllMatches()
-                        }
+                        }*/
                     )
                 }
             }
@@ -113,7 +113,7 @@ fun HomeScreen(
     historyList: List<Match>,
     goToGameScreen: () -> Unit,
     goToDetailScreen: (Int) -> Unit,
-    deleteAll: () -> Unit
+    // deleteAll: () -> Unit
 ) {
     Column(
         modifier = modifier
@@ -156,7 +156,7 @@ fun HomeScreen(
                 )
             }
             // PULSANTE DA TOGLIERE PRIMA DI CONDIVIDERE IL PROGETTO COME FINITO!!!!!
-            Button(
+            /*Button(
                 onClick = deleteAll,
                 colors = ButtonDefaults.filledTonalButtonColors(MaterialTheme.colorScheme.primary),
             ) {
@@ -164,7 +164,7 @@ fun HomeScreen(
                     "Delete ALL",
                     color = MaterialTheme.colorScheme.onPrimary
                 )
-            }
+            }*/
         }
     }
 }
@@ -252,7 +252,7 @@ fun HomeScreenPreview() {
             ),
             goToGameScreen = {},
             goToDetailScreen = {},
-            deleteAll = {}
+            // deleteAll = {}
         )
     }
 }

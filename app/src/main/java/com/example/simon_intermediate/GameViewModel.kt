@@ -128,7 +128,7 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
 
         gameOverJob = viewModelScope.launch {
             Log.d(tagGameViewModel, "Handling current match game over")
-            
+
             // il gioco è fermo e i tasti diventano rossi
             delay(1000)
 
