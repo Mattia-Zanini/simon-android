@@ -1,4 +1,4 @@
-# Simon Game - Progetto Intermedio
+# Simon Game
 
 Applicazione Android che implementa una variante del gioco "Simon" per il corso di **Programmazione di sistemi embedded** 2025-2026 presso l'Università degli Studi di Padova.
 
