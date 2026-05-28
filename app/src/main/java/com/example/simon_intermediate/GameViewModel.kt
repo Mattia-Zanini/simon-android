@@ -2,10 +2,8 @@ package com.example.simon_intermediate
 
 import android.app.Application
 import android.util.Log
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -16,53 +14,65 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.lifecycle.viewmodel.compose.SavedStateHandleSaveableApi
+import androidx.lifecycle.viewmodel.compose.saveable
 
 // ho creato un altro ViewModel per la GameActivity in quanto è consigliato creare ViewModel
 // differenti per diverse Activity, soprattutto se devono gestire dati e compiti differenti
 // qui infatti verrà gestita la logica del computer (da fare) e il slvataggio delle partite
-class GameViewModel(application: Application, private val matchDao: MatchDao) :
-    AndroidViewModel(application) {
+//
+// utilizzo SavedStateHandle per gestire la casistica (b) del ciclo di vita, in questo modo salvo lo stato in un
+// bundle prima della distruzione dell'Activity per poi ripristinarlo all'avvio successivo in caso di Process Death
+@OptIn(SavedStateHandleSaveableApi::class) // tolgo i warning del compilatore, in quanto .saveable risulta esssere sperimentale
+class GameViewModel(
+    application: Application,
+    private val matchDao: MatchDao,
+    savedStateHandle: SavedStateHandle // https://developer.android.com/topic/libraries/architecture/viewmodel/viewmodel-savedstate
+) : AndroidViewModel(application) {
 
     private val tagGameViewModel = this::class.simpleName
 
     // contiene la sequenza che il computer genera e mostra all'utente
-    var gameSequence by mutableStateOf("")
+    var gameSequence by savedStateHandle.saveable { mutableStateOf("") }
         private set // incapsulamento: in questo modo la variabile è SOLO visibile all'esterno, ma non modificabile
 
     // contiene la sequenza che l'utente ha cliccato
-    var userSequence by mutableStateOf("")
+    var userSequence by savedStateHandle.saveable { mutableStateOf("") }
         private set
 
     // false se il computer sta riproducendo la sequenza, true se tocca all'utente
-    var isPlayerTurn by mutableStateOf(false)
+    var isPlayerTurn by savedStateHandle.saveable { mutableStateOf(false) }
         private set
 
     // Contiene la label del colore che il computer sta mostrando (es. "R")
-    var activeColorLabel by mutableStateOf<String?>(null)
+    var activeColorLabel by savedStateHandle.saveable { mutableStateOf<String?>(null) }
         private set
 
     // Rappresenta l'index della sequenza che il computer ha appena mostrato
-    var computerIndex by mutableIntStateOf(0)
+    var computerIndex by savedStateHandle.saveable { mutableIntStateOf(0) }
         private set
 
     // indica dove è arrivato l'utente nel riprodurre la sequenza
-    var playerIndex by mutableIntStateOf(0)
+    var playerIndex by savedStateHandle.saveable { mutableIntStateOf(0) }
         private set
 
     // mantiene lo stato in cui si trova il gioco, se in pausa oppure no
-    var isGamePaused by mutableStateOf(false)
+    var isGamePaused by savedStateHandle.saveable { mutableStateOf(false) }
         private set
 
     // tiene lo stato di gioco di fine partita o partita in corso
-    var isGameOver by mutableStateOf(false)
+    var isGameOver by savedStateHandle.saveable { mutableStateOf(false) }
         private set
 
     // solo il giocare può decidere quando iniziare la partita
-    var isGameStarted by mutableStateOf(false)
+    var isGameStarted by savedStateHandle.saveable { mutableStateOf(false) }
         private set
 
     // tiene traccia se l'applicazione è in background (stato: paused)
-    var isAppPaused by mutableStateOf(false)
+    var isAppPaused by savedStateHandle.saveable { mutableStateOf(false) }
         private set
 
     // traccio la Coroutine in esecuzione che riproduce la sequenza
@@ -258,14 +268,21 @@ class GameViewModel(application: Application, private val matchDao: MatchDao) :
     }
 }
 
-// Factory per inizializzare il GameViewModel con il DAO
+// Factory per inizializzare il GameViewModel con il DAO.
+// Consente di ricavare il SavedStateHandle dal sistema tramite CreationExtras per passarlo al costruttore.
 class GameViewModelFactory(
     private val application: Application,
     private val matchDao: MatchDao
 ) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+    override fun <T : ViewModel> create(
+        modelClass: Class<T>,
+        extras: CreationExtras
+    ): T {
         if (modelClass.isAssignableFrom(GameViewModel::class.java)) {
-            return modelClass.cast(GameViewModel(application, matchDao))!!
+            // Estrae automaticamente il SavedStateHandle fornito dal sistema
+            val handle = extras.createSavedStateHandle()
+
+            return modelClass.cast(GameViewModel(application, matchDao, handle))!!
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
