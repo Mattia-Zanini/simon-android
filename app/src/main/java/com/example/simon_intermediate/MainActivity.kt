@@ -92,14 +92,7 @@ class MainActivity : ComponentActivity() {
                             )
                             Log.d(tagMainActivity, "startActivity of MatchDetail")
                             startActivity(myIntent)
-                        },
-
-
-                        // DA RIMUOVERE ALLA FINE DEL PROGETTO (SOLO DEV)!!!!!!
-                        /*deleteAll = {
-                            // Chiamo la funzione del ViewModel per pulire il database
-                            mainViewModel.deleteAllMatches()
-                        }*/
+                        }
                     )
                 }
             }
@@ -112,8 +105,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     historyList: List<Match>,
     goToGameScreen: () -> Unit,
-    goToDetailScreen: (Int) -> Unit,
-    // deleteAll: () -> Unit
+    goToDetailScreen: (Int) -> Unit
 ) {
     Column(
         modifier = modifier
@@ -155,16 +147,6 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.onPrimary
                 )
             }
-            // PULSANTE DA TOGLIERE PRIMA DI CONDIVIDERE IL PROGETTO COME FINITO!!!!!
-            /*Button(
-                onClick = deleteAll,
-                colors = ButtonDefaults.filledTonalButtonColors(MaterialTheme.colorScheme.primary),
-            ) {
-                Text(
-                    "Delete ALL",
-                    color = MaterialTheme.colorScheme.onPrimary
-                )
-            }*/
         }
     }
 }

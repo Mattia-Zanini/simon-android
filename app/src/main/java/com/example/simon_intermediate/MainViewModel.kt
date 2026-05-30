@@ -25,13 +25,6 @@ class MainViewModel(application: Application, private val matchDao: MatchDao) :
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
-
-    // Esegue la cancellazione totale delle partite
-    fun deleteAllMatches() {
-        viewModelScope.launch(Dispatchers.IO) {
-            matchDao.deleteAll()
-        }
-    }
 }
 
 // Definisco la Factory necessaria per passare i parametri al costruttore del ViewModel

@@ -20,8 +20,4 @@ interface MatchDao {
     // Recupero le informazioni di una singola riga tramite il suo ID
     @Query("SELECT * FROM gameHistory WHERE id = :matchID")
     suspend fun getMatchInfo(matchID: Int): Match
-
-    // Rimuovo tutte le righe dalla tabella (DEV)
-    @Query("DELETE FROM gameHistory WHERE 1=1")
-    suspend fun deleteAll()
 }
